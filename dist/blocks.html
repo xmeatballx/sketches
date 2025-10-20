@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>test</title>
+    <link rel="stylesheet" href="./style.css">
+    <script src="./lib/p5.min.js" data-head=""></script><script src="https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/gl-matrix.js" data-head=""></script><script src="https://cdn.jsdelivr.net/npm/@davepagurek/p5.filterrenderer@0.0.17/p5.filterRenderer.min.js" data-head=""></script><script type="importmap" data-head="">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+    <style>
+  #controls {
+    width: 100%;
+  }
+
+  #app {
+    display:flex;
+    width: 100%;
+  }
+
+  aside {
+    width: 100%;
+    max-width: 500px;
+  }
+
+  summary {
+    position: relative;
+  }
+
+  .swatch {
+    width: 24px;
+    height: 24px;
+    position: relative;
+  }
+
+  .swatch:after {
+    content: "";
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: 1;
+    background-color: attr(value type(<color>), red);
+  }
+
+  details:has(.swatch[aria-label="red"]:checked) summary .swatch:after {
+    background-color: red;
+  }
+  details:has(.swatch[aria-label="yellow"]:checked) summary .swatch:after {
+    background-color: yellow;
+  }
+  details:has(.swatch[aria-label="green"]:checked) summary .swatch:after {
+    background-color: green;
+  }
+  details:has(.swatch[aria-label="blue"]:checked) summary .swatch:after {
+    background-color: blue;
+  }
+
+  input[type="radio"] {
+    appearance: none;
+  }
+
+  summary, ul {
+    list-style: none;
+  }
+  button {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  details {
+    position: relative;
+  }
+
+  details ul {
+    padding: 0;
+    display: flex;
+    gap: 1rem;
+    margin: 0;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.2rem;
+  }
+</style>
+  </head>
+  <body>
+    <main>
+      <div id="controls">
+  <div id="app">
+    <aside>
+      <details>
+	<summary aria-label="colors">
+	  <div class="swatch"></div>
+	</summary>
+	<fieldset>
+	  <input type="radio" name="colors" class="swatch" value="red" aria-label="red" checked="">
+	  <input type="radio" name="colors" class="swatch" value="yellow" aria-label="yellow">
+	  <input type="radio" name="colors" class="swatch" value="green" aria-label="green">
+	  <input type="radio" name="colors" class="swatch" value="blue" aria-label="blue">
+	</fieldset>
+      </details>
+      <fieldset>
+	<div>
+	  <label for="blockWidth">Block width</label>
+	  <input id="blockWidth" type="range" min="1" max="5">
+	</div>
+	<div>
+	  <label for="blockDepth">Block depth</label>
+	  <input id="blockDepth" type="range" min="1" max="5">
+	</div>
+      </fieldset>
+    </aside>
+  </div>
+</div>
+      
+      <script type="module" id="sketch">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+let colors = [
+  new THREE.Color().setRGB(1,0,0),
+  new THREE.Color().setRGB(0,1,0),
+  new THREE.Color().setRGB(0,0,1),
+  new THREE.Color().setRGB(1,1,0),
+];
+
+class TileGrid {
+  constructor(rows, cols, rowSize, colSize) {
+    this.tiles = [];
+    this.rows = rows;
+    this.cols = cols;
+    let i = 0;
+    this.rowSize = rowSize;
+    this.colSize = colSize;
+    this.w = rowSize*rows-rowSize;
+    this.d = colSize*cols-colSize;
+    for (let z = 0; z < cols; z++) {
+      for (let x = 0; x < rows; x++) {
+	let pos = this.getCellPosition(x, z);
+	this.tiles[i] = new Tile(x, z, pos, rowSize, colSize, colors[0]); 
+	i++;
+      }
+    }
+  }
+  getActiveTile() {
+    return this.tiles.find(tile => tile.hovered);
+  }
+
+  getTile(x, z) {
+    return this.tiles[x+z*this.rows]
+  }
+  getCellPosition(row, col) {
+    return new THREE.Vector3(
+      row*this.rowSize-this.w/2,
+      0,
+      (col*this.colSize)-this.d/2
+    );
+  }
+}
+
+class Tile {
+  constructor(row, col, pos, w, d) {
+    this.row = row;
+    this.col = col;
+    this.x = pos.x;
+    this.y = pos.y;
+    this.z = pos.z;
+    this.w = w;
+    this.h = 0.5;
+    this.d = d;
+    this.maxHeight = 0;
+    this.hovered = false;
+    this.blocks = [];
+    this.bounds = new THREE.Box3();
+    this.calculateBounds();
+    this.overlaps = [];
+    this.cellBounds = new THREE.Box3();
+    this.cellBounds.copy(this.bounds);
+    this.boundsHelper = new THREE.Box3Helper(this.cellBounds);
+    //this.drawBounds();
+  }
+
+  calculateBounds() {
+    this.bounds = new THREE.Box3(
+      new THREE.Vector3(this.x-this.w/2, 0, this.z-this.d/2),
+      new THREE.Vector3(this.x+this.w/2, this.h+this.maxHeight, this.z+this.d/2)
+    );
+    if (this.boundsHelper) {
+      //this.drawBounds();
+    }
+  }
+
+  drawBounds() {
+    scene.remove(this.boundsHelper);
+    this.boundsHelper.dispose();
+    this.boundsHelper = new THREE.Box3Helper(this.cellBounds);
+    console.log(this.cellBounds)
+    scene.add(this.boundsHelper);
+  }
+
+  calculateOverlaps(tiles, blockWidth, blockDepth) {
+    this.overlaps = [];
+    this.maxHeight = 0;
+    this.cellBounds.copy(this.bounds);
+    let eX = (blockWidth - this.w)/8;
+    let eZ = (blockDepth - this.d)/8;
+    this.cellBounds.expandByVector(new THREE.Vector3(eX, 100, eZ));
+    if (blockWidth % 2 == 0) this.cellBounds.translate(new THREE.Vector3(this.w/2, 0, 0));
+    if (blockDepth % 2 != 0) this.cellBounds.translate(new THREE.Vector3(0, 0, -this.d/2));
+
+    let maxHeight = 0;
+    for (let tile of tiles) {
+      for (let block of tile.blocks) {
+        if (this.cellBounds.intersectsBox(block.bounds)) {
+	  maxHeight = Math.max(maxHeight, block.y);
+        }
+      }
+    }
+    this.maxHeight = maxHeight;
+  }
+
+  addBlock(x, y, z, w, h, d, c) {
+    let block;
+    block = new Block(x, y, z, w*this.w, h, d*this.d, c, new THREE.MeshPhysicalMaterial({ reflectivity: 0.8 }));
+
+    this.blocks.push(block);
+    block.show();
+  }
+
+  removeBlock(i) {
+    if (this.maxHeight > 0) {
+      scene.remove(this.blocks[i].group);
+      this.blocks.splice(i, 1);
+      this.maxHeight-=this.h;
+    }
+  }
+}
+
+class Block {
+  constructor(x, y, z, w, h, d, c, m) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+    this.w = w;
+    this.h = h;
+    this.d = d;
+    this.c = c.clone();
+    this.dotSize = 0.1;
+    this.dots = [];
+    this.meshes = [];
+    this.group = new THREE.Group();
+    this.material = m;
+    this.hovered = false;
+    m.color = this.c.clone();
+    let box = this.createBox();
+    box.geometry.computeBoundingBox();
+    this.group.position.set(this.x, this.y + this.h/2, this.z);
+    this.bounds = box.geometry.boundingBox.translate(this.group.position);
+    const boundsHelper = new THREE.Box3Helper(this.bounds);
+    boundsHelper.material.color = 0x0000ff;
+    //if (this.y > 0) scene.add(boundsHelper);
+    this.createDots();
+  }
+
+  createBox() {
+    const geometry = new THREE.BoxGeometry(this.w, this.h, this.d);
+    let mesh = new THREE.Mesh( geometry, this.material.clone() );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.meshes.push(mesh);
+    this.group.add(mesh);
+    return mesh;
+  }
+
+  createDots() {
+    this.getDotPositions();
+    this.dots.forEach(dot => {
+      const c1Geometry = new THREE.CylinderGeometry( 0.2, 0.2, 0.2); 
+      const c1Mesh = new THREE.Mesh( c1Geometry, this.material );
+      c1Mesh.position.x = dot.x;
+      c1Mesh.position.y = dot.y;
+      c1Mesh.position.z = dot.z;
+      this.meshes.push(c1Mesh);
+      this.group.add(c1Mesh);
+    })
+  }
+
+  show() {
+    scene.add( this.group );
+  }
+
+  getDotPositions() {
+    let marginX = 0.15;
+    let marginZ = 0.15;
+    const dotsX = this.w * 2;  // number of dots across width
+    const dotsZ = this.d * 2; 
+    const totalWidthForDots = this.w - (2 * marginX) - (this.dotSize * 2);
+    const totalDepthForDots = this.d - (2 * marginZ) - (this.dotSize * 2);
+    const spacingX = totalWidthForDots / (dotsX - 1);
+    const spacingZ = totalDepthForDots / (dotsZ - 1);
+
+    for (let z = 0; z < dotsZ; z++) { 
+      for (let x = 0; x < dotsX; x++) { 
+	this.dots.push({
+	  x: -this.w/2 + marginX + this.dotSize + (spacingX * x),
+	  y: this.h/2,
+	  z: -this.d/2 + marginZ + this.dotSize + (spacingZ * z)
+	});
+      }
+    }
+    /*this.dots.push({
+      x: -this.dotSize-marginX+this.w/2,
+      y: this.h/2,
+      z: -this.dotSize-marginZ,
+    })
+    this.dots.push({
+      x: this.dotSize+marginX-this.w/2,
+      y: this.h/2,
+      z: -this.dotSize-marginZ,
+    })
+    this.dots.push({
+      x: -this.dotSize-marginX+this.w/2,
+      y: this.h/2,
+      z: this.dotSize+marginZ,
+    })
+    this.dots.push({
+      x: this.dotSize+marginX-this.w/2,
+      y: this.h/2,
+      z: this.dotSize+marginZ,
+    })*/
+  }
+}
+
+class UI {
+  constructor() {
+    this.colorButtons = document.querySelectorAll("input.swatch");
+    this.activeColor = document.querySelector(".swatch:checked");
+    this.colorButtons.forEach(button => {
+      button.addEventListener("click", (e) => {
+	this.activeColor = e.target;
+      })
+    });
+    this.blockWidthSlider = document.querySelector("#blockWidth");
+    this.blockDepthSlider = document.querySelector("#blockDepth");
+
+  }
+
+  onBlockDimChange(dim, callback) {
+    if (dim == "width") {
+      this.blockWidthSlider.addEventListener("input", e =>  {
+	callback.call(this, e.target.value); 
+      });
+    } else if (dim == "depth") {
+      this.blockDepthSlider.addEventListener("input", e =>  {
+	callback.call(this, e.target.value); 
+      });
+    } else {
+      throw("Invalid dimension in UI.onBlockDimChange");
+    }
+  }
+
+  getActiveColor() {
+    return this.activeColor.value;
+  }
+}
+
+class SceneControls {
+  constructor(camera) {
+    this.camera = camera;
+    this.uiCamera = new THREE.PerspectiveCamera( 70, (window.innerWidth-menuWidth) / window.innerHeight, 0.1, 100 );
+    this.uiCamera.position.x = 2;
+    this.uiCamera.position.z = 2;
+    this.mouseDown = false;
+    this.raycaster = new THREE.Raycaster();
+
+    this.scene = new THREE.Scene();
+    let position = new THREE.Vector3(2, 0, 0);
+    this.gizmo = new Gizmo(position, 0.02, 1);
+    this.gizmo.group.rotateY(-Math.PI/4);
+    let box = new THREE.Box3Helper(this.gizmo.bounds);
+    //this.scene.add(this.gizmo.group);
+    //this.scene.add(box);
+    this.mouseOrigin = new THREE.Vector2();
+  }
+
+  handleMouse(mouse) {
+    this.raycaster.setFromCamera(mouse, this.uiCamera);
+    const intersects = this.raycaster.ray.intersectsBox(this.gizmo.bounds);
+    if (intersects && this.mouseDown) {
+      const spherical = new THREE.Spherical();
+      const target = new THREE.Vector3(0, 0, 0); // orbit center
+
+      // Initialize from current camera position
+      spherical.setFromVector3(camera.position.clone().sub(target));
+      let deltaX = mouse.x - this.mouseOrigin.x;
+      let deltaY = mouse.y - this.mouseOrigin.y;
+      const rotationSpeed = 0.1;
+
+      // Get camera's local axes
+      const offset = camera.position.clone().sub(target);
+
+      // Rotate around world Y-axis (horizontal drag)
+      const quaternionY = new THREE.Quaternion().setFromAxisAngle(
+	  new THREE.Vector3(0, 1, 0), 
+	  -deltaX * rotationSpeed
+      );
+      offset.applyQuaternion(quaternionY);
+
+      // Rotate around camera's local X-axis (vertical drag)
+      const cameraRight = new THREE.Vector3();
+      camera.getWorldDirection(cameraRight);
+      cameraRight.cross(new THREE.Vector3(0, 1, 0)).normalize();
+
+      const quaternionX = new THREE.Quaternion().setFromAxisAngle(
+	  cameraRight,
+	  deltaY * rotationSpeed
+      );
+      offset.applyQuaternion(quaternionX);
+
+      //camera.position.copy(target).add(offset);
+      //camera.lookAt(target);
+      const inverseQuaternion = camera.quaternion.clone().invert();
+      this.gizmo.group.quaternion.copy(inverseQuaternion);
+    }
+  }
+
+}
+
+class Gizmo {
+  constructor(position, thickness, len) {
+    this.position = position;
+    this.origin = new THREE.Vector3(0, 0, 0);
+    this.group = new THREE.Group();
+    this.group.position.copy(position.clone());
+    this.thickness = thickness;
+    this.len = len;
+    this.bounds = new THREE.Box3(
+      new THREE.Vector3(position.x-len, position.y-len, position.z-len),
+      new THREE.Vector3(position.x+len, position.y+len, position.z+len)
+    );
+    this.createArrows();
+    this.createBall();
+  }
+
+  createBall() {
+    const sphereGeometry = new THREE.SphereGeometry(0.15);
+    const ball = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ color: 0xcccccc }));
+    this.group.add(ball);
+  }
+
+  createArrows() {
+    let arrowX = this.createThickArrow(new THREE.Vector3(1, 0, 0), this.origin, this.len, 0xff0000, this.thickness, 0.03);
+    this.group.add(arrowX);
+    let arrowY = this.createThickArrow(new THREE.Vector3(0, 1, 0), this.origin, this.len, 0xffff00, this.thickness, 0.03);
+    this.group.add(arrowY);
+    let arrowZ = this.createThickArrow(new THREE.Vector3(0, 0, 1), this.origin, this.len, 0x00ff00, this.thickness, 0.03);
+    this.group.add(arrowZ);
+  };
+
+
+  createThickArrow(dir, origin, length, color, shaftRadius, coneRadius) {
+    const group = new THREE.Group();
+    
+    // Normalize direction
+    dir.normalize();
+    
+    // Create shaft (cylinder)
+    const shaftLength = length * 0.8;
+    const shaftGeometry = new THREE.CylinderGeometry(
+      shaftRadius, shaftRadius, shaftLength, 8
+    );
+    shaftGeometry.translate(0, length/2, 0);
+    const shaftMaterial = new THREE.MeshBasicMaterial({ color });
+    const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
+    
+    // Create head (cone)
+    const headLength = length * 0.2;
+    const headGeometry = new THREE.ConeGeometry(coneRadius * 2, headLength, 8);
+    const head = new THREE.Mesh(headGeometry, shaftMaterial);
+    head.position.y = shaftLength + headLength / 2;
+
+    
+    group.add(shaft);
+    group.add(head);
+    
+    // Position and orient
+    group.position.copy(origin);
+    group.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0), dir
+    );
+    
+    return group;
+  }
+
+}
+
+let camera, scene, renderer, orbitControls, controls, raycaster, pointer, grid, mouseLight, blockWidth, blockDepth;
+let cursor;
+let menuWidth = 300;
+let ui;
+init();
+
+function init() {
+  blockWidth = 2;
+  blockDepth = 4;
+  ui = new UI();
+
+  camera = new THREE.PerspectiveCamera( 70, (window.innerWidth-menuWidth) / window.innerHeight, 0.1, 100 );
+  camera.position.y = 10;
+  camera.position.z = 5;
+  camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+  let width=20;
+  let height = 10;
+  raycaster = new THREE.Raycaster();
+  pointer = new THREE.Vector2();
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color().setRGB(0,0,0);
+
+  renderer = new THREE.WebGLRenderer( { antialias: true } );
+  renderer.setPixelRatio( window.devicePixelRatio );
+  renderer.setSize( window.innerWidth-menuWidth, window.innerHeight );
+  renderer.setAnimationLoop( animate );
+  renderer.domElement.setAttribute("id", "scene");
+  document.querySelector("#app").appendChild( renderer.domElement );
+
+  orbitControls = new OrbitControls( camera, renderer.domElement );
+  controls = new SceneControls( camera );
+
+  const light = new THREE.AmbientLight( 0xf3f3f3 );
+  scene.add( light );
+
+  const directionalLight = new THREE.DirectionalLight( 0xffffff, 9 );
+  directionalLight.position.x = 5;
+  scene.add( directionalLight );
+
+  mouseLight = new THREE.PointLight( 0xffffff, 9, 4 );
+  scene.add(mouseLight);
+
+  window.addEventListener( 'resize', onWindowResize );
+
+  grid = new TileGrid(20, 20, 0.5, 0.5);
+  for (let y = 0; y < grid.cols; y+=2) {
+    for (let x = 0; x < grid.rows; x+=2) {
+      let i = x+y*grid.rows;
+      let tile = grid.tiles[i];
+      tile.addBlock(
+	tile.x+tile.w/2,
+	tile.y,
+	tile.z,
+	2,
+	tile.h,
+	2,
+	colors[2],
+	new THREE.MeshPhysicalMaterial({ reflectivity: 0.7 })
+      );
+      tile.blocks[0].show();
+    }
+  }
+  cursor = new Block(
+    grid.tiles[0].blocks[0].x,
+    grid.tiles[0].blocks[0].y+grid.tiles[0].h,
+    grid.tiles[0].blocks[0].z,
+    blockWidth/2,
+    grid.tiles[0].blocks[0].h,
+    blockDepth/2,
+    new THREE.Color( 0xffffff ),
+    new THREE.MeshBasicMaterial( { wireframe: true } )
+  );
+  cursor.show();
+  ui.onBlockDimChange("width", (w) => {
+    blockWidth = w;
+    scene.remove(cursor.group);
+    cursor = new Block(
+      cursor.group.position.x,
+      cursor.group.position.y,
+      cursor.group.position.z,
+      blockWidth/2,
+      cursor.h,
+      blockDepth/2,
+      new THREE.Color( 0xffffff ),
+      new THREE.MeshBasicMaterial( { wireframe: true } )
+    );
+    scene.add(cursor.group);
+    grid.tiles.forEach(t => {
+      t.calculateBounds();
+      t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
+    });
+  });
+  ui.onBlockDimChange("depth", (d) => {
+    blockDepth = d;
+    scene.remove(cursor.group);
+    cursor = new Block(
+      cursor.group.position.x,
+      cursor.group.position.y,
+      cursor.group.position.z,
+      blockWidth/2,
+      cursor.h,
+      blockDepth/2,
+      new THREE.Color( 0xffffff ),
+      new THREE.MeshBasicMaterial( { wireframe: true } )
+    );
+    grid.tiles.forEach(t => {
+      t.calculateBounds();
+      t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
+    });
+    scene.add(cursor.group);
+  });
+}
+
+window.addEventListener( 'pointermove', onPointerMove );
+renderer?.domElement?.addEventListener( 'click', onClick );
+window.addEventListener( 'contextmenu', onRightClick );
+window.addEventListener( 'mousedown', () => {
+  controls.mouseOrigin = pointer.clone();
+  controls.mouseDown = true;
+  console.log('down');
+
+});
+window.addEventListener( 'mouseup', () => {
+  console.log("up");
+  controls.mouseDown = false;
+});
+
+function onWindowResize() {
+
+  camera.aspect = (window.innerWidth-menuWidth) / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize( window.innerWidth-menuWidth, window.innerHeight );
+
+}
+
+function animate() {
+  if (renderer?.domElement) orbitControls.update();
+  controls.handleMouse(pointer);
+  raycaster.setFromCamera( pointer, camera );
+
+  //reset state
+  grid.tiles.forEach(tile => {
+    tile.blocks.forEach(block => {
+      block.hovered = false;
+      block.meshes.forEach(mesh => mesh.material.color = block.c.clone());
+    });
+    tile.hovered = false;
+  });
+
+  //get intersections
+  let block;
+  for (let i = 0; i < grid.tiles.length; i++) {
+    block = grid.tiles[i].blocks.find(block => raycaster.ray.intersectsBox(block.bounds));
+    if (block) {
+      block.hovered = true;
+      break;
+    }
+  }
+  let active = grid.tiles.find(tile => {
+    //return !!intersects;
+    return raycaster.ray.intersectsBox(tile.bounds);
+  });
+  if (block) {
+  }
+
+  //do stuff with intersected block
+  if (active) {
+    mouseLight.position.set(active.x, active.y+3, active.z) ;
+    active.hovered = true;
+    let block;
+    for (let i = 0; i < grid.tiles.length; i++) {
+      block = grid.tiles[i].blocks.find(block => raycaster.ray.intersectsBox(block.bounds));
+      if (block) {
+	block.hovered = true;
+	break;
+      }
+    }
+    let pos = new THREE.Vector3(active.x, active.maxHeight + active.h, active.z);
+    if (blockWidth % 2 == 0) pos.x += active.w/2;
+    if (blockDepth % 2 != 0) pos.z -= active.d/2;
+    cursor.group.position.set(pos.x, pos.y + cursor.h/2, pos.z);
+  }
+
+  renderer.autoClear = false;
+  renderer.clear();
+  renderer.render( scene, camera );
+  renderer.clearDepth();
+  renderer.render(controls.scene, controls.uiCamera);
+
+}
+
+function onClick( event ) {
+  let tile = grid.getActiveTile();
+  if (!tile) return;
+  let block;
+  for (let i = 0; i < grid.tiles.length; i++) {
+    block = grid.tiles[i].blocks.find(block => raycaster.ray.intersectsBox(block.bounds));
+    if (block) {
+      block.hovered = true;
+      break;
+    }
+  }
+  let x = tile.x;
+  let z = tile.z;
+  if (blockWidth % 2 == 0) x += tile.w/2;
+  if (blockDepth % 2 != 0) z -= tile.d/2;
+  tile.addBlock(
+    x,
+    tile.maxHeight+tile.h,
+    z,
+    blockWidth,
+    tile.h,
+    blockDepth,
+    new THREE.Color().setStyle(ui.getActiveColor()),
+    new THREE.MeshBasicMaterial()
+  );
+  tile.calculateBounds();
+  grid.tiles.forEach(t => {
+    t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
+  });
+}
+
+function onRightClick( event ) {
+  event.preventDefault();
+  let tile = grid.getActiveTile();
+  tile.removeBlock(tile.blocks.length-1);
+  tile.calculateBounds();
+  grid.tiles.forEach(t => {
+    t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
+  })
+  return false;
+}
+
+function onPointerMove( event ) {
+
+  // calculate pointer position in normalized device coordinates
+  // (-1 to +1) for both components
+
+  pointer.x = ( (event.clientX-menuWidth) / (window.innerWidth - menuWidth) ) * 2 - 1;
+  pointer.y = - ( event.clientY / (window.innerHeight) ) * 2 + 1;
+
+}
+</script>
+      <script src="./lib/sketches.js"></script>
+    </main>
+  </body>
+</html>

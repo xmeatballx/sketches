@@ -1,0 +1,78 @@
+<script src="./lib/p5.min.js" data-head></script>
+<script src="./lib/matter.js" data-head></script>
+
+<script id="sketch">
+const COUNT = 1000;
+const diameter = 50;
+const Engine = Matter.Engine,
+    Render = Matter.Render,
+    Runner = Matter.Runner,
+    Bodies = Matter.Bodies,
+    Body = Matter.Body,
+    Composite = Matter.Composite;
+let circles = [];
+let walls = [];
+
+let engine;
+
+let img;
+function preload(){
+  img = loadImage("./assets/woman.jpg");
+}
+
+function setup() {
+  createCanvas(500,500);
+  background(200);
+  engine = Engine.create();
+  engine.gravity.scale = 0.0001;
+  for (let i = 0; i < COUNT; i++) {
+    const d = randomDiameter();
+    circles[i] = Bodies.circle(floor(random(width-20-d)), floor(random(height-20-d)), d);
+    Body.setMass(circles[i], d*10);
+  }
+  console.log(circles);
+  img.resize(width, height);
+  walls[0] = Bodies.rectangle(width/2, height-10, width, 10, { isStatic: true });
+  walls[1] = Bodies.rectangle(10, height/2, 10, height, { isStatic: true });
+  walls[2] = Bodies.rectangle(width-10, height/2, 10, height, { isStatic: true });
+  walls[3] = Bodies.rectangle(width/2, 10, width, 10, { isStatic: true });
+
+  Composite.add(engine.world, [...circles, ...walls]);
+  let runner = Runner.create();
+  Runner.run(runner, engine);
+}
+
+function draw() {
+  background(0);
+  noStroke();
+  fill(255);
+  for (let i = 0; i < circles.length; i++) {
+    const c = circles[i];
+    const noiseScale = .015;
+    fill(img.get(c.position.x, c.position.y));
+    circle(c.position.x, c.position.y, c.circleRadius*2);
+  }
+  if (frameCount % 20 == 0) {
+    //spawn();
+  }
+  push();
+    fill(255);
+    stroke(200);
+    rect(0,0,width,15);
+    rect(0,height-14,width,14);
+    rect(0,0,14,height);
+    rect(width-14,0,14,height);
+  pop();
+  text(floor(frameRate())+"fps", 15, 25);
+}
+
+function randomDiameter() {
+ return diameter/2*random(0.1,0.5);
+}
+
+function spawn() {
+    const incoming = Bodies.circle(floor(random(width)), 0, randomDiameter());
+    circles.push(incoming);
+    Composite.add(engine.world, [incoming]);
+}
+</script>

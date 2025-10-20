@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>test</title>
+    <link rel="stylesheet" href="./style.css">
+    <script src="./lib/p5.min.js" data-head=""></script>
+    
+  </head>
+  <body>
+    <main>
+      
+      
+      <script id="sketch">
+let base, start, factor, len, t, slider, thickness, fingers, thumb;
+
+function setup() {
+  createCanvas(300, 300, WEBGL);
+  t = 0;
+  factor = 1.2;
+  len = 40;
+  thickness = 20;
+  start = createVector(0,0,0);
+
+  fingers = [];
+  fingers.push(new Finger(0, start, 40, 35, 30));
+  let p = p5.Vector.add(start, createVector(0, 0, -thickness*2+2));
+  fingers.push(new Finger(1, p, 55, 45, 30));
+  fingers.push(new Finger(2, p, 45, 35, 30));
+  fingers.push(new Finger(3, p, 20, 35, 30));
+
+  thumb = new Finger(4, start, 5, 35, 30);
+
+  strokeWeight(1);
+}
+
+function draw() {
+  orbitControl();
+  ambientLight(20);
+  directionalLight(255, 200, 200, 0.5, 1, 0);
+  pointLight(
+    155, 0, 0, // color
+    -40, 0, 300 // position
+  );
+  pointLight(
+    155, 0, 0, // color
+    40, 400, 200 // position
+  );
+  background(0);
+  t += .001;
+  
+  push();
+  translate(-thickness*2, 0, thickness*2);
+  rotate(radians(-110), createVector(0, 1, 0));
+  for (let i = 0; i < fingers.length; i++) {
+    fingers[i].show();
+  }
+  pop();
+
+  /*push();
+  noStroke();
+  fill(250, 200, 0);
+  translate(-thickness*2,50,thickness*2);
+  rotate(radians(-45), createVector(0, 1, 0));
+  cylinder(thickness, 80);
+  translate(0,0,-thickness*5-14);
+  cylinder(thickness, 80);
+  translate(0,0,thickness*3);
+  box(thickness*2, 80, thickness*5);
+  pop();*/
+
+  push();
+  noStroke();
+  fill(250, 200, 0);
+  translate(0,10,0);
+  rotate(radians(-110), createVector(0, 1, 0));
+  rotate(radians(-130), createVector(1, 0, 0));
+  translate(0, -90, 20); 
+  thumb.show();
+  pop();
+}
+
+class Segment {
+  constructor(x, y, heading, mag, jointAngle = 0) { // Added jointAngle parameter
+    this.offset = createVector(x, y);
+    this.p2 = createVector(0, 1);
+    this.heading = heading;
+    this.mag = mag;
+    this.jointAngle = jointAngle;
+    this.p2.setHeading(this.heading - PI/2);
+    this.p2.setMag(this.mag);
+    console.log(this.mag);
+  }
+  
+  update(prev, i) {
+    this.offset = createVector(prev.p2.x + prev.offset.x, prev.p2.y + prev.offset.y);
+    this.p2 = createVector(0, 1);
+    
+    this.heading = prev.heading + this.jointAngle;
+    
+    this.p2.setHeading(this.heading - PI/2);
+    this.p2.setMag(this.mag);
+  }
+  
+  show() {
+    fill(250, 200, 0);
+    noStroke();
+    let p1 = createVector(0, 0);
+    let p2 = p5.Vector.copy(this.p2);
+    p2.add(this.offset);
+    p1.add(this.offset);
+    line(p1.x, p1.y, p2.x, p2.y);
+    push();
+    translate(p1.x, p1.y, 0);
+    rotate(this.heading);
+    //sphere(thickness);
+    translate(0,-this.mag/2,0);
+    cylinder(thickness, this.mag);
+    pop();
+
+    push();
+      translate(p2.x, p2.y);
+      sphere(thickness);
+    pop();
+  }
+}  
+
+class Finger {
+  constructor(id, start, len1, len2, len3) {
+    this.id = id;
+    this.slider= createSlider(0, 100, 15);
+    this.slider.position(0, id*20);
+    this.slider.size(80);
+    this.start = start;
+    this.segments = []
+    let prev = new Segment(0, 0, 0, len1, 0.2); 
+    this.segments.push(prev);
+    let p = p5.Vector.add(prev.p2, prev.offset);
+    prev = new Segment(p.x, p.y, prev.heading, len2, 0);
+    this.segments.push(prev);
+    p = p5.Vector.add(prev.p2, prev.offset);
+    prev = new Segment(p.x, p.y, prev.heading, len3, 0);
+    this.segments.push(prev);
+    this.inc = random(.005, .009);
+    this.t = 0;
+  }
+
+  show() {
+    this.t+=this.inc;
+    let nVal = noise(this.t)*.3;
+    let sVal = this.slider.value();
+    translate(this.start);
+    this.segments[0].heading = this.segments.length*sVal/80+nVal;
+    this.segments[0].p2.setHeading(this.segments[0].heading-PI/2);
+    this.segments[0].show();
+    this.segments[1].jointAngle = this.segments.length*sVal/120+nVal+.1; 
+    this.segments[1].update(this.segments[0], 1);
+    this.segments[1].show();
+    this.segments[2].jointAngle = this.segments.length*sVal/150+nVal; 
+    this.segments[2].update(this.segments[1], 2);
+    this.segments[2].show();
+  }
+}
+</script>
+      <script src="./lib/sketches.js"></script>
+    </main>
+  </body>
+</html>

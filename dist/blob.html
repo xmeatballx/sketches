@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>test</title>
+    <link rel="stylesheet" href="./style.css">
+    <script src="./lib/p5.min.js" data-head=""></script>
+    <style>
+#sketch {
+  border: 20px solid red;
+}
+</style>
+  </head>
+  <body>
+    <main>
+      
+      
+      <script id="sketch">
+let ring = [];
+let ringRadius = 100;
+let ringCount = 10;
+let sourceLayer, blurLayer, sharpLayer, compositeLayer;
+function setup() {
+  createCanvas(400, 400);
+  sourceLayer = createGraphics(width, height);
+  blurLayer = createGraphics(width, height);
+  sharpLayer = createGraphics(width, height);
+  compositeLayer = createGraphics(width, height);
+  post = createGraphics(width, height);
+  update();
+  ring.forEach(dot => {
+    dot.thetaOffset = random(-.05,.05);
+    dot.radius = random(5, 200);
+    update(frameCount/100, frameCount/50, frameCount/125);
+  })
+  background(220);
+}
+
+function draw() {
+  background(255);
+  sourceLayer.clear();
+  sourceLayer.fill(255,255,255);
+  ring.forEach(dot => {
+    update(frameCount/100, frameCount/50, frameCount/125);
+    sourceLayer.circle(dot.x, dot.y, dot.radius);
+  });
+  image(sourceLayer,0,0);
+
+  blurLayer.background(0);
+  blurLayer.image(sourceLayer,0,0);
+  blurLayer.filter(BLUR, 40);
+  image(blurLayer,0,0);
+
+  sharpLayer.background(0);
+  sharpLayer.image(blurLayer,0,0,width,height);
+  sharpLayer.filter(THRESHOLD);
+  image(sharpLayer,0,0);
+
+  post.clear();
+  post.image(sharpLayer,4,4,width-8,height-8);
+  post.filter(INVERT);
+  post.blend(sharpLayer,0,0,width,height,0,0,width,height,MULTIPLY);
+  image(post,0,0);
+
+  compositeLayer.clear();
+  compositeLayer.blendMode(ADD);
+  compositeLayer.tint(color(255,0,0,255));
+  compositeLayer.image(post,0,0,width,height);
+  compositeLayer.tint(color(0,255,0,255));
+  compositeLayer.image(post,2,2,width-4,height-4);
+  compositeLayer.tint(color(0,0,255,255));
+  compositeLayer.image(post,6,6,width-12,height-12);
+  image(compositeLayer,0,0);
+}
+
+function update(offsetX, offsetY, offsetZ) {
+  for (let i=0; i<ringCount; i++) {
+    const thetaX = TWO_PI/ringCount * i+offsetX;
+    const thetaY = TWO_PI/ringCount * i+offsetY;
+    ringRadius = 70+sin(offsetZ)*25;
+
+    let posX = 0;
+    if (ring[i]?.x) {
+      posX = polToCar(thetaX+ring[i].thetaOffset,ringRadius).x;
+    } else {
+      posX = polToCar(thetaX+random(-.05,.05),ringRadius).x;
+    }
+  
+    let posY = 0;
+    posY = polToCar(thetaY+ring[i]?.thetaOffset ?? 0,ringRadius).y;
+    ring[i] = {
+      x:  width/2+posX,
+      y: height/2+posY,
+      radius: ring[i]?.radius ?? 10,
+      thetaOffset: 0
+    }
+  }
+}
+
+function polToCar(theta, radius) {
+  return {
+    x: sin(theta)*radius,
+    y: cos(theta)*radius
+  }
+}
+</script>
+      <script src="./lib/sketches.js"></script>
+    </main>
+  </body>
+</html>

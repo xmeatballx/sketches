@@ -1,0 +1,126 @@
+<title></title>
+
+<script src="./lib/p5.min.js" data-head></script>
+
+<script id="sketch">
+// Adopted from Daniel Shiffman's poisson sampling example
+// http://codingtra.in
+// http://patreon.com/codingtrain
+// Code for this video: https://youtu.be/flQgnCUxHlw
+
+var r = 2;
+var k = 100;
+var grid = [];
+var w = r / Math.sqrt(2);
+var active = [];
+var cols, rows;
+var ordered = [];
+let img;
+let cells = [];
+
+function preload() {
+  img = loadImage("./assets/woman.jpg");
+}
+
+function setup() {
+  createCanvas(img.width, img.height);
+  background(0);
+  strokeWeight(4);
+  colorMode(HSB);
+
+  // STEP 0
+  cols = floor(width / w);
+  rows = floor(height / w);
+  for (var i = 0; i < cols * rows; i++) {
+    grid[i] = undefined;
+  }
+
+  // STEP 1
+  var x = (width / 2);
+  var y = height / 2;
+  var i = floor(x / w);
+  var j = floor(y / w);
+  var pos = createVector(x, y);
+  grid[i + j * cols] = pos;
+  active.push(pos);
+  img.resize(width,height);
+  img.loadPixels();
+  let _x = 0, _y = 0;
+  for (let y = 0; y < rows; y++) {
+    _x = 0;
+    for (let x = 0; x < cols; x++) { 
+      cells[_x + _y * cols] = {
+        x: x * w,  
+        y: y * w,
+        color: img.get(x,y)  // adjust pixel access
+      };
+      _x++;
+    }
+    _y++;
+  }
+}
+
+function draw() {
+  background(255);
+
+  for (var total = 0; total < 25; total++) {
+    if (active.length > 0) {
+      var randIndex = floor(random(active.length));
+      var pos = active[randIndex];
+      var b = brightness(img.get(pos.x,pos.y));
+      r = max(0.5,pow(b/255*8, 1));
+     
+      var found = false;
+      for (var n = 0; n < k; n++) {
+        var sample = p5.Vector.random2D();
+        var m = random(r, 2 * r);
+        sample.setMag(m);
+        sample.add(pos);
+
+        var col = floor(sample.x / w);
+        var row = floor(sample.y / w);
+
+        if (col > -1 && row > -1 && col < cols && row < rows && !grid[col + row * cols]) {
+          var ok = true;
+           if (r > 12) {
+            ok = false;
+          }
+          for (var i = -1; i <= 1; i++) {
+            for (var j = -1; j <= 1; j++) {
+              var index = (col + i) + (row + j) * cols;
+              var neighbor = grid[index];
+              if (neighbor) {
+                var d = p5.Vector.dist(sample, neighbor);
+                if (d < r) {
+                  ok = false;
+                }
+              }
+            }
+          }
+          if (ok) {
+            found = true;
+            grid[col + row * cols] = sample;
+            active.push(sample);
+            ordered.push(sample);
+            // Should we break?
+            break;
+          }
+        }
+      }
+
+      if (!found) {
+        active.splice(randIndex, 1);
+      }
+
+    }
+  }
+
+  for (var i = 0; i < ordered.length; i++) {
+    if (ordered[i]) {
+      stroke(0);
+      strokeWeight(2);
+      point(ordered[i].x, ordered[i].y);
+    }
+  }
+}
+</script>

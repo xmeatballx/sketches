@@ -1,0 +1,22 @@
+{
+  "name": "p5js",
+  "version": "1.0.0",
+  "main": "generate.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "dev": "node generate.js --dev",
+    "build": "node generate.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "chokidar": "^4.0.3",
+    "jsdom": "^26.1.0",
+    "live-server": "^1.2.2",
+    "minimist": "^1.2.8"
+  }
+}

@@ -1,0 +1,130 @@
+<title></title>
+<script src="./lib/p5.min.js" data-head></script>
+
+<img id="img" src="./assets/woman.jpg" style="position: absolute; opacity: 0"/>	
+
+<div id="controls">
+  <input type="range" min="0" max="100" id="slider"/>
+</div>
+
+<script id="sketch">
+let img, texture, noiseTexture, points, slider;
+const noiseLevel = 100000;
+let noiseScale = 0;
+function preload() {
+  img = loadImage("./assets/woman_nobg.png");
+}
+
+function setup() {
+  createCanvas(img.width, img.height);
+
+
+  texture = createGraphics(width,height);
+  texture.image(img, 0,0);
+  texture.filter(GRAY);
+  texture.filter(POSTERIZE);
+  texture.filter(BLUR);
+  texture.filter(INVERT);
+
+  slider = document.getElementById("slider");
+  slider.addEventListener("change", (e) => {
+    setNoiseSeed(e.target.value)
+    if (points) createPoints();
+  });
+
+  //image(texture,0,0);
+  points = [];
+  createPoints();
+  background(255);
+  console.log(points);
+}
+
+function draw() {
+  background(255);
+  let iy = 0;
+  points.map(col => col.map(p => {
+      strokeWeight(p.size);
+      stroke(p.c);
+      point(p.x+p.ox,p.y+p.oy);
+  }));
+}
+
+function setNoiseSeed(val) {
+  noiseSeed(val);
+  points = [];
+  updatePoints();
+  console.log(points[0]);
+}
+
+function createPoints() {
+  let iy = 0;
+  for (let y = 0; y < height; y += 5) {
+    let ix = 0;
+    for (let x = 0; x < width; x += 5) {
+      const imgColor = texture.get(x,y);
+      noiseScale = brightness(imgColor)/255*0.2; 
+
+      let nx = noiseScale * x;
+      let ny = noiseScale * y;
+
+      let cx = noiseLevel * (noise(nx)*2-1);
+      let cy = noiseLevel * (noise(nx)*2-1);
+      let c = fbm(nx, ny, noiseScale, 3);
+
+
+      let p = { 
+        x,
+        y,
+        size: noiseScale * 40 + noise(nx, ny),
+        ox: pow(c,2)*5,
+        oy: pow(c,2), 
+        imgC: imgColor,
+        c: c*100,
+        active: false
+      };
+
+      if (brightness(c) > 0.2 && alpha(imgColor) > 0) {
+        p.active = true;
+        if (!points[ix]) points[ix] = [];
+        points[ix][iy] = p;
+      }
+      ix++;
+    }
+    iy++;
+  }
+  points = points.filter(col => col.length > 0).map(col => col.filter(point => point.active));
+}
+function updatePoints() {
+  points.map((col, i) => col.map((p, j) => {
+    noiseScale = brightness(p.imgC)/255*0.2; 
+
+    let nx = noiseScale * p.x;
+    let ny = noiseScale * p.y;
+
+    let cx = noiseLevel * (noise(nx)*2-1);
+    let cy = noiseLevel * (noise(nx)*2-1);
+    let c = fbm(nx, ny, noiseScale, 3);
+
+    newP = { 
+      ...p,
+      size: noiseScale*40+noise(nx, ny),
+      ox: pow(c,2)*5,
+      oy: pow(c,2), 
+      c: c*100,
+    };
+    points[i][j] = newP;
+  }));
+}
+
+function fbm(x, y, freq, octaves) {
+  let val = 0;
+  let amp = 5;
+
+  for (let i = 0; i < octaves; i++) {
+    val = amp * noise(x*freq, y*freq);
+    freq *= 2;
+    amp *= 0.5;
+  }
+  return val;
+}
+</script>

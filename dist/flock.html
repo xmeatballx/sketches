@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>test</title>
+    <link rel="stylesheet" href="./style.css">
+    <script src="./lib/p5.min.js" data-head=""></script>
+    
+  </head>
+  <body>
+    <main>
+      
+      
+      <script id="sketch">
+let flock;
+
+function setup() {
+  createCanvas(600, 400, WEBGL);
+
+  flock = new Flock();
+
+  // Add an initial set of boids into the system
+  for (let i = 0; i < 300; i++) {
+    let b = new Boid(random(-200,200), random(-200,200), random(-200, 200));
+    flock.addBoid(b);
+  }
+}
+
+
+function draw() {
+  orbitControl();
+  background(0);
+  noStroke();
+  flock.run();
+  directionalLight(255, 255, 255, 1, 1, -0.5);
+  fill(0,0,140, 100);
+  sphere(140);
+}
+class Flock {
+  constructor() {
+    // Initialize the array of boids
+    this.boids = [];
+  }
+
+  run() {
+    for (let boid of this.boids) {
+      // Pass the entire list of boids to each boid individually
+      boid.run(this.boids);
+    }
+  }
+
+  addBoid(b) {
+    this.boids.push(b);
+  }
+}
+
+class Boid {
+  constructor(x, y, z) {
+    this.acceleration = createVector(0, 0, 0);
+    this.velocity = createVector(random(-1, 1), random(-1, 1), random(-1, 1));
+    this.position = createVector(x, y, z);
+    this.radius = 150;
+    this.projection = createVector(x, y, this.radius);
+    this.size = 1.5;
+
+    // Maximum speed
+    this.maxSpeed = random(0.7, 1.);
+
+    // Maximum steering force
+    this.maxForce = random(.006, .009);
+    this.color = color(155);
+  }
+
+  run(boids) {
+    this.flock(boids);
+    this.update();
+    //this.calculateProjection();
+    this.render();
+  }
+
+  applyForce(force) {
+    // We could add mass here if we want: A = F / M
+    this.acceleration.add(force);
+  }
+
+  flock(boids) {
+    let separation = this.separate(boids);
+    let alignment = this.align(boids);
+    let cohesion = this.cohesion(boids);
+    let wander = this.wander();
+
+    separation.mult(1.8);
+    alignment.mult(1.3);
+    cohesion.mult(1.1);
+    wander.mult(1.5);
+
+    this.applyForce(separation);
+    this.applyForce(alignment);
+    this.applyForce(cohesion);
+    this.applyForce(wander);
+  }
+
+  wander() {
+    let wanderForce = createVector(
+      random(-1, 1),
+      random(-1, 1),
+      random(-1, 1)
+    );
+    wanderForce.normalize();
+    wanderForce.mult(0.05);
+    return wanderForce;
+  }
+
+  makeTangent() {
+    // Remove radial component
+    let radial = this.position.copy().normalize();
+    let radialComponent = p5.Vector.dot(this.velocity, radial);
+    this.velocity.sub(p5.Vector.mult(radial, radialComponent));
+  }
+
+  update() {
+    // Make acceleration tangent to sphere
+    let radial = this.position.copy().normalize();
+    let radialComponent = p5.Vector.dot(this.acceleration, radial);
+    this.acceleration.sub(p5.Vector.mult(radial, radialComponent));
+    
+    this.velocity.add(this.acceleration);
+    this.velocity.limit(this.maxSpeed);
+    
+    // Make velocity tangent to sphere
+    this.makeTangent();
+    
+    this.position.add(this.velocity);
+    
+    // Constrain to sphere surface
+    this.position.normalize().mult(this.radius);
+    
+    this.acceleration.mult(0);
+  }
+
+  // A method that calculates and applies a steering force towards a target
+  // STEER = DESIRED MINUS VELOCITY
+  seek(target) {
+    // A vector pointing from the location to the target
+    let desired = p5.Vector.sub(target, this.position);
+
+    // Normalize desired and scale to maximum speed
+    desired.normalize();
+    desired.mult(this.maxSpeed);
+
+    // Steering = Desired minus Velocity
+    let steer = p5.Vector.sub(desired, this.velocity);
+
+    // Limit to maximum steering force
+    steer.limit(this.maxForce);
+    return steer;
+  }
+
+  render() {
+    push();
+    lights();
+    pointLight(color(0, 0, 255), 0, 0, 0);
+    //ambientMaterial(this.color);
+    fill(this.color);
+    translate(this.position);
+    sphere(this.size);
+    pop();
+  }
+
+  // Separation
+  // Method checks for nearby boids and steers away
+  separate(boids) {
+    let desiredSeparation = 15.0;
+    let steer = createVector(0, 0);
+    let count = 0;
+
+    // For every boid in the system, check if it's too close
+    for (let boid of boids) {
+      let distanceToNeighbor = p5.Vector.dist(this.position, boid.position);
+
+      // If the distance is greater than 0 and less than an arbitrary amount (0 when you are yourself)
+      if (distanceToNeighbor > 0 && distanceToNeighbor < desiredSeparation) {
+        // Calculate vector pointing away from neighbor
+        let diff = p5.Vector.sub(this.position, boid.position);
+        diff.normalize();
+
+        // Scale by distance
+        diff.div(distanceToNeighbor);
+        steer.add(diff);
+
+        // Keep track of how many
+        count++;
+      }
+    }
+
+    // Average -- divide by how many
+    if (count > 0) {
+      steer.div(count);
+    }
+
+    // As long as the vector is greater than 0
+    if (steer.mag() > 0) {
+      // Implement Reynolds: Steering = Desired - Velocity
+      steer.normalize();
+      steer.mult(this.maxSpeed);
+      steer.sub(this.velocity);
+      steer.limit(this.maxForce);
+    }
+    return steer;
+  }
+
+  // Alignment
+  // For every nearby boid in the system, calculate the average velocity
+  align(boids) {
+    let neighborDistance = 50;
+    let sum = createVector(0, 0);
+    let count = 0;
+    for (let i = 0; i < boids.length; i++) {
+      let d = p5.Vector.dist(this.position, boids[i].position);
+      if (d > 0 && d < neighborDistance) {
+        sum.add(boids[i].velocity);
+        count++;
+      }
+    }
+    if (count > 0) {
+      sum.div(count);
+      sum.normalize();
+      sum.mult(this.maxSpeed);
+      let steer = p5.Vector.sub(sum, this.velocity);
+      steer.limit(this.maxForce);
+      return steer;
+    } else {
+      return createVector(0, 0);
+    }
+  }
+
+  // Cohesion
+  // For the average location (i.e., center) of all nearby boids, calculate steering vector towards that location
+  cohesion(boids) {
+    let neighborDistance = 50;
+    let sum = createVector(0, 0); // Start with empty vector to accumulate all locations
+    let count = 0;
+    for (let i = 0; i < boids.length; i++) {
+      let d = p5.Vector.dist(this.position, boids[i].position);
+      if (d > 0 && d < neighborDistance) {
+        sum.add(boids[i].position); // Add location
+        count++;
+      }
+    }
+    if (count > 0) {
+      sum.div(count);
+      return this.seek(sum); // Steer towards the location
+    } else {
+      return createVector(0, 0);
+    }
+  }
+
+  calculateProjection() {
+    let xNorm = this.position.x / width;
+    let yNorm = this.position.y / height;
+    
+    let theta = xNorm * TWO_PI;           // Longitude: full circle
+    let phi = (yNorm - 0.5) * TWO_PI;     // Latitude: centered, wider range
+    
+    this.projection.x = this.radius * sin(phi) * cos(theta);
+    this.projection.y = this.radius * sin(phi) * sin(theta);
+    this.projection.z = this.radius * cos(phi);
+    //this.projection = rot3D(this.projection, sin(xNorm*yNorm)*TWO_PI, "x");
+  }
+}
+//https://stackoverflow.com/questions/14607640/rotating-a-vector-in-3d-space
+function rot3D(vec, theta, axis) {
+  let r = vec;
+  let vSin = p5.Vector.mult(vec, sin(theta));
+  let vCos = p5.Vector.mult(vec, cos(theta));
+   
+  switch(axis) {
+    case "x":
+      return createVector(
+	r.x,
+	vCos.y-vSin.z,
+	vSin.y+vCos.z,
+      );
+    case "y":
+      return createVector(
+	vCos.x-vSin.z,
+	r.y,
+	vSin.x+vCos.z,
+      );
+    case "z":
+      return createVector(
+	vCos.x-vSin.y,
+	vSin.x+vCos.y,
+	r.z
+      );
+  }
+  return r; 
+}
+</script>
+      <script src="./lib/sketches.js"></script>
+    </main>
+  </body>
+</html>
