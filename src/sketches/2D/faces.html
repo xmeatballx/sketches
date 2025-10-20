@@ -81,7 +81,7 @@ function draw() {
   }
 }
 
-Promise.all([faceapi.nets.ssdMobilenetv1.loadFromUri("../../lib/models")]).then(detect).catch(error => console.log(error));
+Promise.all([faceapi.nets.ssdMobilenetv1.loadFromUri("./lib/models")]).then(detect).catch(error => console.log(error));
 
 
 async function detect() {
