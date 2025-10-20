@@ -30,7 +30,7 @@ function setup() {
   textSize(32);
   fill(0);
   text('loading...', width/2, height/2);
-  blendMode(DIFFERENCE);
+  blendMode(LIGHTEST);
 }
 
 function draw() {
@@ -41,6 +41,20 @@ function draw() {
     //clearInterval(awaitDetection);
     for (var i = 0; i < boxes.length; i++) {
       let nextFaceIndex = (i+1)%(detections.length); 
+      copy(
+        imgjs,
+        boxes[i].x,
+        boxes[i].y,
+        boxes[i].w,
+        boxes[i].h,
+        boxes[nextFaceIndex].x,
+        boxes[nextFaceIndex].y,
+        boxes[nextFaceIndex].w,
+        boxes[nextFaceIndex].h
+      );
+    }
+    for (var i = boxes.length-1; i > 0; i--) {
+      let nextFaceIndex = (i-1)%(detections.length); 
       copy(
         imgjs,
         boxes[i].x,

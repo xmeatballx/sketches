@@ -1,6 +1,14 @@
 <title></title>
 <script src="./lib/p5.min.js" data-head ></script>
 
+<style>
+#img {
+  scale: 0.5;
+  translate: 0 -25%;
+  top: 4px;
+}
+</style>
+
 <img id="img" src="./assets/woman.jpg" style="position: absolute; z-index: -1;"/>	
 <script id="sketch">
 let img, texture, points, currentPos, pointSize, lastPoint, radius;
@@ -9,10 +17,11 @@ function preload() {
 }
 
 function setup() {
+  img.resize(img.width/2, img.height/2);
   createCanvas(img.width, img.height);
 
   texture = createGraphics(width,height);
-  texture.image(img, 0,0);
+  texture.image(img, 0,0, width, height);
   texture.filter(GRAY);
   texture.filter(INVERT);
 

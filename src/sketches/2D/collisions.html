@@ -2,7 +2,7 @@
 <script src="./lib/matter.js" data-head></script>
 
 <script id="sketch">
-const COUNT = 1000;
+const COUNT = 100;
 const diameter = 50;
 const Engine = Matter.Engine,
     Render = Matter.Render,
@@ -24,7 +24,7 @@ function setup() {
   createCanvas(500,500);
   background(200);
   engine = Engine.create();
-  engine.gravity.scale = 0.0001;
+  engine.gravity.scale = 0.0002;
   for (let i = 0; i < COUNT; i++) {
     const d = randomDiameter();
     circles[i] = Bodies.circle(floor(random(width-20-d)), floor(random(height-20-d)), d);
@@ -52,8 +52,10 @@ function draw() {
     fill(img.get(c.position.x, c.position.y));
     circle(c.position.x, c.position.y, c.circleRadius*2);
   }
-  if (frameCount % 20 == 0) {
-    //spawn();
+  if (circles.length < 1000) {
+    for (let i = 0; i < 2; i++) {
+      spawn();
+    }
   }
   push();
     fill(255);
@@ -71,8 +73,9 @@ function randomDiameter() {
 }
 
 function spawn() {
-    const incoming = Bodies.circle(floor(random(width)), 0, randomDiameter());
+    const incoming = Bodies.circle(floor(random(width)), 20, randomDiameter());
     circles.push(incoming);
     Composite.add(engine.world, [incoming]);
+    console.log(circles.length);
 }
 </script>

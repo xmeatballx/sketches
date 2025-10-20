@@ -109,7 +109,6 @@ async function compileSketch(template, path) {
   const doc = parser.parseFromString(sketch, 'text/html');
 
   const title = getDisplayNameFromHTMLFileName(path);
-  console.log(title);
   const styles = doc.querySelector('style')?.outerHTML ?? '';
   const libs = doc.querySelectorAll('script[data-head]');
   const libScripts = [...libs].reduce((acc, curr) => {

@@ -1,6 +1,13 @@
 <title></title>
 <script src="./lib/p5.min.js" data-head></script>
 
+<style>
+#img {
+  scale: 0.5;
+  translate: 0 -25%;
+}
+</style>
+
 <img id="img" src="./assets/woman.jpg" style="position: absolute; opacity: 0"/>	
 
 <div id="controls">
@@ -17,11 +24,12 @@ function preload() {
 
 function setup() {
   createCanvas(img.width, img.height);
+  resizeCanvas(width/2, height/2);
 
 
   texture = createGraphics(width,height);
-  texture.image(img, 0,0);
-  texture.filter(GRAY);
+  texture.image(img, 0, 0, width, height);
+  //texture.filter(GRAY);
   texture.filter(POSTERIZE);
   texture.filter(BLUR);
   texture.filter(INVERT);
@@ -36,7 +44,6 @@ function setup() {
   points = [];
   createPoints();
   background(255);
-  console.log(points);
 }
 
 function draw() {
@@ -58,9 +65,9 @@ function setNoiseSeed(val) {
 
 function createPoints() {
   let iy = 0;
-  for (let y = 0; y < height; y += 5) {
+  for (let y = 0; y < height; y += 3) {
     let ix = 0;
-    for (let x = 0; x < width; x += 5) {
+    for (let x = 0; x < width; x += 3) {
       const imgColor = texture.get(x,y);
       noiseScale = brightness(imgColor)/255*0.2; 
 
@@ -75,15 +82,15 @@ function createPoints() {
       let p = { 
         x,
         y,
-        size: noiseScale * 40 + noise(nx, ny),
+        size: noiseScale * 50 + noise(nx, ny),
         ox: pow(c,2)*5,
         oy: pow(c,2), 
         imgC: imgColor,
-        c: c*100,
+        c: imgColor,
         active: false
       };
 
-      if (brightness(c) > 0.2 && alpha(imgColor) > 0) {
+      if (brightness(c) > 0.15 && alpha(imgColor) > 0) {
         p.active = true;
         if (!points[ix]) points[ix] = [];
         points[ix][iy] = p;
