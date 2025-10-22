@@ -1,15 +1,13 @@
 const argv = require('minimist')(process.argv.slice(2));
-
 const fs = require('fs').promises;
 const chokidar = require('chokidar');
 const liveServer = require('live-server');
-
 const { JSDOM } = require('jsdom');
 
 const PORT = 8080;
 const SRC_DIR = 'src';
 const SKETCH_DIR = `${SRC_DIR}/sketches`;
-const OUT_DIR = argv.dev ? '.tmp' : 'dist';
+const OUT_DIR = argv.dev ? 'tmp' : 'dist';
 
 async function main() {
   const sketchDir = await fs.opendir(`./${SKETCH_DIR}`);
@@ -116,7 +114,7 @@ async function compileSketch(template, path) {
   }, '');
   const image = doc.querySelector('#img')?.outerHTML ?? ''; 
   const controls = doc.querySelector('#controls')?.outerHTML ?? '';
-  const sketchScript = doc.querySelector('script#sketch').outerHTML;
+  const sketchScript = doc.querySelector('script#sketch')?.outerHTML;
 
   const html = template
     .replace('{{ title }}', title.displayName)

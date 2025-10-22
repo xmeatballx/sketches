@@ -1,0 +1,355 @@
+<style>
+#controls {
+   width: 450px;
+}
+
+input#cursor {
+  width: 100%;
+  max-width: none;
+}
+</style>
+
+<script src="./lib/p5.min.js" data-head ></script>
+<script src="./lib/components/range.js" data-head ></script>
+
+<div id="controls">
+  <input id="cursor" type="range" min=0 max=0 />
+  <button type="button" id="copy-frame">Copy frame</button>
+  <button type="button" id="paste-frame">Paste frame</button>
+  <button type="button" id="play">Play</button>
+  <button type="button" id="pause">Pause</button>
+  <button type="button" id="stop">Stop</button>
+  <input type="number" id="frameRate" value="12">
+  <input type="number" id="frames" value="12">
+  <input type="color" id="color">
+</div>
+
+<script id="sketch">
+let rows, cols, rowWidth, colWidth, timeline, UI, currentColor;
+function setup() {
+  createCanvas(450, 450);
+  rows = 32;
+  cols = 32;
+  rowWidth = width/rows;
+  colWidth = height/cols;
+  timeline = new AnimationManager();
+  filledCells = [];
+  rectMode("CENTER");
+  currentColor = color(0);
+
+  UI = initializeUI();
+
+  timeline.frameRate = parseInt(UI.frameRateInput.element.value);
+  timeline.setNumFrames(parseInt(UI.frameCountInput.element.value));
+}
+
+function draw() {
+  background(255);
+  timeline.update();
+
+  UI.cursor.element.value = timeline.currentFrame;
+  UI.cursor.element.max = timeline.animation.length - 1;
+  if (timeline.playState == 'playing') {
+  } else {
+    let prevCells = timeline.getPrevFrame().filledCells;
+    drawGrid();
+    for (const cell of prevCells) {
+      let x = (rowWidth*cell.row);
+      let y = (colWidth*cell.col);
+      fill(255, 0, 0, 20);
+      noStroke();
+      rect(x, y, rowWidth, colWidth);
+    }
+  }
+
+
+  let cells = timeline.getFrame().filledCells;
+  for (const cell of cells) {
+    let x = (rowWidth*cell.row);
+    let y = (colWidth*cell.col);
+    fill(cell.color);
+    noStroke();
+    rect(x, y, rowWidth, colWidth);
+  }
+}
+
+function drawGrid() {
+  push();
+  stroke(0, 0, 0, 20);
+  for (x = 0; x < rows; x++) {
+    line(x*rowWidth, 0, x*rowWidth, height); 
+  }
+
+  for (y = 0; y < cols; y++) {
+    line(0, y*colWidth, width, y*colWidth);
+  }
+  pop();
+}
+
+function mousePressed(e) {
+  if (e.target.classList.contains("p5Canvas")) {
+    timeline.getFrame().startLine(mouseX, mouseY);
+  }
+}
+
+function mouseDragged(e) {
+  if (e.target.classList.contains("p5Canvas")) {
+    timeline.getFrame().updateLine(mouseX, mouseY);
+  }
+}
+
+function initializeUI() {
+  let ui = {
+    cursor: {
+      element: document.getElementById("cursor"),
+      eventName: 'input',
+      callback: (e) => {
+	timeline.scrub(parseInt(e.target.value));
+      }
+    },
+    copyFrameButton: {
+      element: document.getElementById("copy-frame"),
+      eventName: 'click',
+      callback: () => {
+	timeline.copyAnimationFrame();
+      }
+    },
+    pasteFrameButton: {
+      element: document.getElementById("paste-frame"),
+      eventName: 'click',
+      callback: () => {
+	timeline.pasteAnimationFrame();
+      }
+    },
+    playButton: {
+      element: document.getElementById('play'),
+      eventName: 'click',
+      callback: () => {
+	timeline.play();
+      }
+    },
+    pauseButton: {
+      element: document.getElementById('pause'),
+      eventName: 'click',
+      callback: () => {
+	timeline.pause();
+      }
+    },
+    stopButton: {
+      element: document.getElementById('stop'),
+      eventName: 'click',
+      callback: () => {
+	timeline.stop();
+      }
+    },
+    frameRateInput: {
+      element: document.getElementById('frameRate'),
+      eventName: 'input',
+      callback: (e) => {
+	timeline.frameRate = parseInt(e.target.value);
+      }
+    },
+    frameCountInput: {
+      element: document.getElementById('frames'),
+      eventName: 'input',
+      callback: (e) => {
+	timeline.setNumFrames(parseInt(e.target.value));
+      }
+    },
+    colorInput: {
+      element: document.getElementById('color'),
+      eventName: 'change',
+      callback: (e) => {
+	currentColor = color(e.target.value);
+      }
+    }
+  }
+  for (const control in ui) {
+    let { element, eventName, callback } = ui[control];
+    element.addEventListener(eventName, callback);
+  }
+  return ui;
+}
+
+
+class AnimationManager {
+  constructor() {
+    this.currentFrame = 0;
+    this.progress = 0;
+    this.frameRate = 1;
+    this.frameAccumulator = 0;
+    this.playState = 'idle';
+    this.animation = [];
+    this.clipboard = null;
+    this.lastRequestedFrame = 0;
+  }
+
+  play() {
+    this.playState = 'playing';
+  }
+
+  pause() {
+    this.playState = 'paused';
+  }
+
+  stop() {
+    this.playState = 'idle';
+    this.currentFrame = 0;
+    this.frameAccumulator = 0;
+  }
+
+  copyAnimationFrame() {
+    this.clipboard = this.animation[this.currentFrame];
+  }
+  
+  pasteAnimationFrame() {
+    this.animation[this.currentFrame] = this.clipboard.copy();
+  }
+
+  setNumFrames(n) {
+    if (n > this.animation.length) {
+      const numItemsToAdd = n - this.animation.length;
+      for (let i = 0; i < numItemsToAdd; i++) {
+	this.animation.push(new Frame());
+      }
+    } else {
+      const numItemsToDelete = this.animation.length - n;
+      this.animation.splice(this.animation.length - 1 - numItemsToDelete, numItemsToDelete);
+    }
+  }
+
+  getFrame() {
+    let frame = this.animation[this.currentFrame];
+    this.lastRequestedFrame = this.currentFrame;
+    return frame;
+  }
+
+  getPrevFrame() {
+    if (this.currentFrame === 0) return this.animation[0];
+    let frame = this.animation[this.currentFrame-1];
+    return frame;
+  }
+
+  needsUpdate() {
+    return this.currentFrame != this.lastRequestedFrame;
+  }
+
+  scrub(cursor) {
+    this.currentFrame = cursor;
+  }
+
+  update() {
+    if (this.playState == 'playing') {
+      this.frameAccumulator += deltaTime / 1000;
+      
+      const frameTime = 1 / this.frameRate;
+      while (this.frameAccumulator >= frameTime) {
+	this.currentFrame = (this.currentFrame+1)%this.animation.length;
+	this.frameAccumulator -= frameTime;
+      }
+      this.progress = this.currentFrame / Math.min(this.animation.length);
+    }
+  }
+}
+
+class Frame {
+  constructor(cells = []) {
+    this.filledCells = cells;
+    this.line = new BresenhamLine();
+    this.prevLineLength = 0;
+  }
+
+  startLine(x, y) {
+    const cellCoords = new Cell(x, y);
+    this.line.start(cellCoords.row, cellCoords.col);
+    this.prevLineLength = 0;
+  }
+
+  updateLine(newX, newY) {
+    const cellCoords = new Cell(newX, newY);
+    this.line.calculate(cellCoords.row, cellCoords.col);
+    for (let i = 0; i < this.prevLineLength; i++) {
+      this.filledCells.pop();
+    }
+    this.prevLineLength = 0;
+    for (const cell of this.line.points) {
+      if (!this.filledCells.find(filledCell => filledCell.id === cell.id)) {
+	this.filledCells.push(cell);
+	this.prevLineLength++;
+      }
+    }
+  }
+
+  copy() {
+    return new Frame([...this.filledCells]);
+  }
+}
+
+class BresenhamLine {
+  constructor() {
+    this.startX = 0;
+    this.startY = 0;
+    this.points = [];
+  }
+
+  start(startX, startY) {
+    this.points = [];
+    this.startX = startX;
+    this.startY = startY;
+  }
+  
+  calculate(newX, newY) {
+    this.points = [];
+    const dx = Math.abs(newX - this.startX);
+    const dy = Math.abs(newY - this.startY);
+    const sx = this.startX < newX ? 1 : -1;  // step direction
+    const sy = this.startY < newY ? 1 : -1;
+    let err = dx - dy;  // error accumulator
+    
+    let x = this.startX, y = this.startY;
+    
+    while (true) {
+      let cell = new Cell(1, 1, currentColor);
+      cell.setGridCoords(x, y);
+      this.points.push(cell);
+      
+      if (x === newX && y === newY) break;
+      
+      const e2 = 2 * err;
+      
+      // Should we step in x?
+      if (e2 > -dy) {
+	err -= dy;
+	x += sx;
+      }
+      
+      // Should we step in y?
+      if (e2 < dx) {
+	err += dx;
+	y += sy;
+      }
+    }
+  }
+}
+
+class Cell {
+  constructor(x, y, c) {
+    this.row = Math.floor(x/width*rows);
+    this.col = Math.floor(y/height*cols);
+    this.id = this.hashPosition(this.row, this.col);
+    this.color = c;
+  }
+
+  setGridCoords(row, col) {
+    this.row = row;
+    this.col = col;
+    this.id = this.hashPosition(this.row, this.col);
+  }
+
+  hashPosition(x, y) {
+    return (x + y) * (x + y + 1) / 2 + y;
+  }
+}
+
+
+</script>
