@@ -14,18 +14,30 @@ input#cursor {
 
 <div id="controls">
   <input id="cursor" type="range" min=0 max=0 />
-  <button type="button" id="copy-frame">Copy frame</button>
-  <button type="button" id="paste-frame">Paste frame</button>
-  <button type="button" id="play">Play</button>
-  <button type="button" id="pause">Pause</button>
-  <button type="button" id="stop">Stop</button>
-  <input type="number" id="frameRate" value="12">
-  <input type="number" id="frames" value="12">
-  <input type="color" id="color">
+  <fieldset>
+    <button type="button" id="copy-frame">Copy frame</button>
+    <button type="button" id="paste-frame">Paste frame</button>
+    <button type="button" id="play">Play</button>
+    <button type="button" id="pause">Pause</button>
+    <button type="button" id="stop">Stop</button>
+  </fieldset>
+  <fieldset>
+    <input type="color" id="color"/>
+    <input type="radio" id="pencil" value="pencil" name="mode"/>
+    <label for="pencil">Pencil</label>
+    <input type="radio" id="line" value="line" name="mode"/>
+    <label for="line">Line</label>
+    <input type="radio" id="eraser" value="eraser" name="mode"/>
+    <label for="eraser">Eraser</label>
+  </fieldset>
+  <fieldset>
+    <input type="number" id="frameRate" value="12"/>
+    <input type="number" id="frames" value="12"/>
+  </fieldset>
 </div>
 
 <script id="sketch">
-let rows, cols, rowWidth, colWidth, timeline, UI, currentColor;
+let rows, cols, rowWidth, colWidth, timeline, UI, currentColor, mode;
 function setup() {
   createCanvas(450, 450);
   rows = 32;
@@ -37,18 +49,32 @@ function setup() {
   rectMode("CENTER");
   currentColor = color(0);
 
-  UI = initializeUI();
+  mode = 'pencil';
 
-  timeline.frameRate = parseInt(UI.frameRateInput.element.value);
-  timeline.setNumFrames(parseInt(UI.frameCountInput.element.value));
+  UI = initializeUI();
+  UI.on('playheadMove', (e) => timeline.scrub(parseInt(e.target.value)));
+  UI.on('copyFrame', () => timeline.copyAnimationFrame());
+  UI.on('pasteFrame', () => timeline.pasteAnimationFrame());
+  UI.on('play', () => timeline.play());
+  UI.on('pause', () => timeline.pause());
+  UI.on('stop', () => timeline.stop());
+  UI.on('frameRateChange', (e) => timeline.frameRate = parseInt(e.target.value));
+  UI.on('frameCountChange', (e) => timeline.setNumFrames(parseInt(e.target.value)));
+  UI.on('colorChange', (e) => currentColor = color(e.target.value));
+  UI.on('mousePress', () => handleDraw(true));
+  UI.on('mouseDrag', () => handleDraw());
+  UI.on('modeChange', (e) => mode = e.target.value);
+
+  timeline.frameRate = parseInt(UI.frameRateInput.value);
+  timeline.setNumFrames(parseInt(UI.frameCountInput.value));
 }
 
 function draw() {
   background(255);
   timeline.update();
 
-  UI.cursor.element.value = timeline.currentFrame;
-  UI.cursor.element.max = timeline.animation.length - 1;
+  UI.playhead.value = timeline.currentFrame;
+  UI.playhead.max = timeline.animation.length - 1;
   if (timeline.playState == 'playing') {
   } else {
     let prevCells = timeline.getPrevFrame().filledCells;
@@ -86,89 +112,87 @@ function drawGrid() {
   pop();
 }
 
-function mousePressed(e) {
-  if (e.target.classList.contains("p5Canvas")) {
-    timeline.getFrame().startLine(mouseX, mouseY);
-  }
-}
-
-function mouseDragged(e) {
-  if (e.target.classList.contains("p5Canvas")) {
-    timeline.getFrame().updateLine(mouseX, mouseY);
+function handleDraw(isClick = false) {
+  switch(mode) {
+    case 'pencil':
+      timeline.getFrame().drawPoint(mouseX, mouseY);
+      break;
+    case 'line':
+      if (isClick) timeline.getFrame().startLine(mouseX, mouseY);
+      else timeline.getFrame().updateLine(mouseX, mouseY);
+      break;
+    case 'eraser':
+      timeline.getFrame().erasePoint(mouseX, mouseY);
   }
 }
 
 function initializeUI() {
-  let ui = {
-    cursor: {
-      element: document.getElementById("cursor"),
-      eventName: 'input',
-      callback: (e) => {
-	timeline.scrub(parseInt(e.target.value));
-      }
-    },
-    copyFrameButton: {
-      element: document.getElementById("copy-frame"),
-      eventName: 'click',
-      callback: () => {
-	timeline.copyAnimationFrame();
-      }
-    },
-    pasteFrameButton: {
-      element: document.getElementById("paste-frame"),
-      eventName: 'click',
-      callback: () => {
-	timeline.pasteAnimationFrame();
-      }
-    },
-    playButton: {
-      element: document.getElementById('play'),
-      eventName: 'click',
-      callback: () => {
-	timeline.play();
-      }
-    },
-    pauseButton: {
-      element: document.getElementById('pause'),
-      eventName: 'click',
-      callback: () => {
-	timeline.pause();
-      }
-    },
-    stopButton: {
-      element: document.getElementById('stop'),
-      eventName: 'click',
-      callback: () => {
-	timeline.stop();
-      }
-    },
-    frameRateInput: {
-      element: document.getElementById('frameRate'),
-      eventName: 'input',
-      callback: (e) => {
-	timeline.frameRate = parseInt(e.target.value);
-      }
-    },
-    frameCountInput: {
-      element: document.getElementById('frames'),
-      eventName: 'input',
-      callback: (e) => {
-	timeline.setNumFrames(parseInt(e.target.value));
-      }
-    },
-    colorInput: {
-      element: document.getElementById('color'),
-      eventName: 'change',
-      callback: (e) => {
-	currentColor = color(e.target.value);
-      }
+  let elements = {
+    canvas: document.querySelector('.p5Canvas'),
+    playhead: document.getElementById("cursor"),
+    copyFrameButton: document.getElementById("copy-frame"),
+    pasteFrameButton: document.getElementById("paste-frame"),
+    playButton: document.getElementById('play'),
+    pauseButton: document.getElementById('pause'),
+    stopButton: document.getElementById('stop'),
+    frameRateInput: document.getElementById('frameRate'),
+    frameCountInput: document.getElementById('frames'),
+    colorInput: document.getElementById('color'),
+    modeInputs: document.querySelectorAll('[name="mode"]'),
+  }
+
+  let mouseDown = false;
+
+  elements.canvas.addEventListener('mouseup', () => mouseDown = false);
+  elements.canvas.addEventListener('mouseleave', () => mouseDown = false);
+
+  const on = (eventName, callback) => {
+    switch(eventName) {
+      case 'mousePress':
+	elements.canvas.addEventListener('mousedown', (e) => {
+	  mouseDown = true;
+	  callback(e);
+	});
+	break;	
+      case 'mouseDrag':
+	elements.canvas.addEventListener('mousemove', (e) => {
+	  console.log(mouseDown);
+	  if (!mouseDown) return;
+	  console.log('dragged');
+	  callback(e);
+	});
+	break;	
+      case 'playheadMove':
+	elements.playhead.addEventListener('input', callback);
+	break;
+      case 'copyFrame':
+	elements.copyFrameButton.addEventListener('click', callback);
+	break;
+      case 'pasteFrame':
+	elements.pasteFrameButton.addEventListener('click', callback);
+	break;
+      case 'play':
+	elements.playButton.addEventListener('click', callback);
+	break;
+      case 'pause':
+	elements.pauseButton.addEventListener('click', callback);
+	break;
+      case 'stop':
+	elements.stopButton.addEventListener('click', callback);
+	break;
+      case 'colorChanged':
+	elements.colorInput.addEventListener('change', callback);
+      case 'frameRateChange':
+	elements.frameRateInput.addEventListener('change', callback);
+	break;
+      case 'frameCountChange':
+	elements.frameCountInput.addEventListener('change', callback);
+	break;
+      case 'modeChange':
+	elements.modeInputs.forEach(radio => radio.addEventListener('click', callback));
     }
   }
-  for (const control in ui) {
-    let { element, eventName, callback } = ui[control];
-    element.addEventListener(eventName, callback);
-  }
-  return ui;
+  return { ...elements, on };
 }
 
 
@@ -273,10 +297,27 @@ class Frame {
     }
     this.prevLineLength = 0;
     for (const cell of this.line.points) {
-      if (!this.filledCells.find(filledCell => filledCell.id === cell.id)) {
+      const existingCell = this.filledCells.find(filledCell => filledCell.id === cell.id);
+      if (existingCell) {
+	existingCell.color = cell.color;	
+      } else {
 	this.filledCells.push(cell);
 	this.prevLineLength++;
       }
+    }
+  }
+
+  drawPoint(x, y) {
+    const cell = new Cell(x, y, currentColor);
+    const existingCell = this.filledCells.find(filledCell => filledCell.id === cell.id);
+    if (!existingCell) this.filledCells.push(cell);
+  }
+
+  erasePoint(x, y) {
+    const cellCoords = new Cell(x, y);
+    const existingCellIdx = this.filledCells.findIndex(filledCell => filledCell.id === cellCoords.id);
+    if (existingCellIdx > -1) {
+      this.filledCells.splice(existingCellIdx, 1);
     }
   }
 
