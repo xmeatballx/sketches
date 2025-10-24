@@ -4,7 +4,7 @@
 }
 </style>
 
-<script src="./lib/p5.min.js" data-head ></script>
+<script src="./lib/vendor/p5.min.js" data-head ></script>
 
 <script id="sketch">
 let ring = [];
@@ -18,7 +18,7 @@ function setup() {
   sharpLayer = createGraphics(width, height);
   compositeLayer = createGraphics(width, height);
   post = createGraphics(width, height);
-  update();
+  update(0, 0, 0);
   ring.forEach(dot => {
     dot.thetaOffset = random(-.05,.05);
     dot.radius = random(5, 200);

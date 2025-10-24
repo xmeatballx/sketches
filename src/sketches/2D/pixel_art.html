@@ -1,3 +1,9 @@
+<script src="./lib/vendor/p5.min.js" data-head ></script>
+<script src="./lib/components/range.js" data-head ></script>
+<script src="./lib/classes/animation.js" data-head ></script>
+<script src="./lib/classes/bresenham-line.js" data-head ></script>
+<script src="./lib/classes/clipboard.js" data-head ></script>
+
 <style>
 #controls {
    width: 450px;
@@ -9,14 +15,15 @@ input#cursor {
 }
 </style>
 
-<script src="./lib/p5.min.js" data-head ></script>
-<script src="./lib/components/range.js" data-head ></script>
-
 <div id="controls">
   <input id="cursor" type="range" min=0 max=0 />
   <fieldset>
     <button type="button" id="copy-frame">Copy frame</button>
     <button type="button" id="paste-frame">Paste frame</button>
+    <button type="button" id="duplicate">Duplicate</button>
+    <button type="button" id="clear">Clear</button>
+  </fieldset>
+  <fieldset>
     <button type="button" id="play">Play</button>
     <button type="button" id="pause">Pause</button>
     <button type="button" id="stop">Stop</button>
@@ -42,102 +49,15 @@ input#cursor {
   </fieldset>
 </div>
 
-<script id="sketch">
-let rows, cols, rowWidth, colWidth, timeline, UI, currentColor, mode;
-function setup() {
-  createCanvas(450, 450);
-  rows = 32;
-  cols = 32;
-  rowWidth = width/rows;
-  colWidth = height/cols;
-  timeline = new AnimationManager();
-  filledCells = [];
-  rectMode("CENTER");
-  currentColor = color(0);
-
-  mode = 'pencil';
-
-  UI = initializeUI();
-  UI.on('playheadMove', (e) => timeline.scrub(parseInt(e.target.value)));
-  UI.on('copyFrame', () => timeline.copyAnimationFrame());
-  UI.on('pasteFrame', () => timeline.pasteAnimationFrame());
-  UI.on('play', () => timeline.play());
-  UI.on('pause', () => timeline.pause());
-  UI.on('stop', () => timeline.stop());
-  UI.on('frameRateChange', (e) => timeline.frameRate = parseInt(e.target.value));
-  UI.on('frameCountChange', (e) => timeline.setNumFrames(parseInt(e.target.value)));
-  UI.on('colorChange', (e) => currentColor = color(e.target.value));
-  UI.on('mousePress', () => handleDraw(true));
-  UI.on('mouseDrag', () => handleDraw());
-  UI.on('modeChange', (e) => mode = e.target.value);
-
-  timeline.frameRate = parseInt(UI.frameRateInput.value);
-  timeline.setNumFrames(parseInt(UI.frameCountInput.value));
-}
-
-function draw() {
-  background(255);
-  timeline.update();
-
-  UI.playhead.value = timeline.currentFrame;
-  UI.playhead.max = timeline.animation.length - 1;
-  if (timeline.playState == 'playing') {
-  } else {
-    let prevCells = timeline.getPrevFrame().filledCells;
-    drawGrid();
-    for (const cell of prevCells) {
-      let x = (rowWidth*cell.row);
-      let y = (colWidth*cell.col);
-      fill(255, 0, 0, 20);
-      noStroke();
-      rect(x, y, rowWidth, colWidth);
-    }
-  }
-
-
-  let cells = timeline.getFrame().filledCells;
-  for (const cell of cells) {
-    let x = (rowWidth*cell.row);
-    let y = (colWidth*cell.col);
-    fill(cell.color);
-    noStroke();
-    rect(x, y, rowWidth, colWidth);
-  }
-}
-
-function drawGrid() {
-  push();
-  stroke(0, 0, 0, 20);
-  for (x = 0; x < rows; x++) {
-    line(x*rowWidth, 0, x*rowWidth, height); 
-  }
-
-  for (y = 0; y < cols; y++) {
-    line(0, y*colWidth, width, y*colWidth);
-  }
-  pop();
-}
-
-function handleDraw(isClick = false) {
-  switch(mode) {
-    case 'pencil':
-      timeline.getFrame().drawPoint(mouseX, mouseY);
-      break;
-    case 'line':
-      if (isClick) timeline.getFrame().startLine(mouseX, mouseY);
-      else timeline.getFrame().updateLine(mouseX, mouseY);
-      break;
-    case 'eraser':
-      timeline.getFrame().erasePoint(mouseX, mouseY);
-  }
-}
-
+<script>
 function initializeUI() {
   let elements = {
     canvas: document.querySelector('.p5Canvas'),
     playhead: document.getElementById("cursor"),
     copyFrameButton: document.getElementById("copy-frame"),
     pasteFrameButton: document.getElementById("paste-frame"),
+    duplicateButton: document.getElementById("duplicate"),
+    clearButton: document.getElementById("clear"),
     playButton: document.getElementById('play'),
     pauseButton: document.getElementById('pause'),
     stopButton: document.getElementById('stop'),
@@ -162,9 +82,7 @@ function initializeUI() {
 	break;	
       case 'mouseDrag':
 	elements.canvas.addEventListener('mousemove', (e) => {
-	  console.log(mouseDown);
 	  if (!mouseDown) return;
-	  console.log('dragged');
 	  callback(e);
 	});
 	break;	
@@ -173,6 +91,12 @@ function initializeUI() {
 	break;
       case 'copyFrame':
 	elements.copyFrameButton.addEventListener('click', callback);
+	break;
+      case 'duplicateFrame':
+	elements.duplicateButton.addEventListener('click', callback);
+	break;
+      case 'clearFrame':
+	elements.clearButton.addEventListener('click', callback);
 	break;
       case 'pasteFrame':
 	elements.pasteFrameButton.addEventListener('click', callback);
@@ -199,86 +123,109 @@ function initializeUI() {
     }
   }
   return { ...elements, on };
+
+}
+</script>
+
+<script id="sketch">
+let canvasWidth = 450,
+    canvasHeight = 450,
+    rows = 32,
+    cols = 32,
+    rowWidth = canvasWidth / rows,
+    colWidth = canvasHeight / cols,
+    mode = 'pencil',
+    timeline,
+    clipboard,
+    UI,
+    currentColor;
+
+function setup() {
+  createCanvas(canvasWidth, canvasHeight);
+
+  timeline = new Animation(() => new Frame());
+  clipboard = new Clipboard();
+  currentColor = color(0);
+
+  UI = initializeUI();
+  UI.on('playheadMove', (e) => timeline.scrub(parseInt(e.target.value)));
+  UI.on('copyFrame', () => clipboard.copy(timeline.getCurrentFrame(), frame => frame.copy()));
+  UI.on('pasteFrame', () => timeline.setFrame(timeline.currentFrame, clipboard.paste()));
+  UI.on('duplicateFrame', () => {
+    clipboard.copy(timeline.getCurrentFrame(), frame => frame.copy());
+    timeline.setFrame(timeline.currentFrame + 1, clipboard.paste());
+    timeline.scrub(timeline.currentFrame + 1);
+  });
+  UI.on('clearFrame', () => timeline.setFrame(timeline.currentFrame, new Frame()));
+  UI.on('play', () => timeline.play());
+  UI.on('pause', () => timeline.pause());
+  UI.on('stop', () => timeline.stop());
+  UI.on('frameRateChange', (e) => timeline.frameRate = parseInt(e.target.value));
+  UI.on('frameCountChange', (e) => timeline.setLength(parseInt(e.target.value)));
+  UI.on('colorChange', (e) => currentColor = color(e.target.value));
+  UI.on('mousePress', () => handleDraw(true));
+  UI.on('mouseDrag', () => handleDraw());
+  UI.on('modeChange', (e) => mode = e.target.value);
+
+  timeline.frameRate = parseInt(UI.frameRateInput.value);
+  timeline.setLength(parseInt(UI.frameCountInput.value));
+
+  rectMode("CENTER");
 }
 
+function draw() {
+  background(255);
+  timeline.update(deltaTime);
 
-class AnimationManager {
-  constructor() {
-    this.currentFrame = 0;
-    this.progress = 0;
-    this.frameRate = 1;
-    this.frameAccumulator = 0;
-    this.playState = 'idle';
-    this.animation = [];
-    this.clipboard = null;
-    this.lastRequestedFrame = 0;
-  }
+  UI.playhead.value = timeline.currentFrame;
+  UI.playhead.max = timeline.frames.length - 1;
 
-  play() {
-    this.playState = 'playing';
-  }
-
-  pause() {
-    this.playState = 'paused';
-  }
-
-  stop() {
-    this.playState = 'idle';
-    this.currentFrame = 0;
-    this.frameAccumulator = 0;
-  }
-
-  copyAnimationFrame() {
-    this.clipboard = this.animation[this.currentFrame];
-  }
-  
-  pasteAnimationFrame() {
-    this.animation[this.currentFrame] = this.clipboard.copy();
-  }
-
-  setNumFrames(n) {
-    if (n > this.animation.length) {
-      const numItemsToAdd = n - this.animation.length;
-      for (let i = 0; i < numItemsToAdd; i++) {
-	this.animation.push(new Frame());
-      }
-    } else {
-      const numItemsToDelete = this.animation.length - n;
-      this.animation.splice(this.animation.length - 1 - numItemsToDelete, numItemsToDelete);
+  if (timeline.playState !== 'playing') {
+    let prevCells = timeline.getFrame(timeline.currentFrame-1)?.filledCells;
+    drawGrid();
+    if (prevCells) {
+      drawCells(prevCells, color(255, 0, 0, 20));
     }
   }
 
-  getFrame() {
-    let frame = this.animation[this.currentFrame];
-    this.lastRequestedFrame = this.currentFrame;
-    return frame;
+  let cells = timeline.getCurrentFrame().filledCells;
+  drawCells(cells);
+}
+
+function drawGrid() {
+  push();
+  stroke(0, 0, 0, 20);
+  for (x = 0; x < rows; x++) {
+    line(x*rowWidth, 0, x*rowWidth, height); 
   }
 
-  getPrevFrame() {
-    if (this.currentFrame === 0) return this.animation[0];
-    let frame = this.animation[this.currentFrame-1];
-    return frame;
+  for (y = 0; y < cols; y++) {
+    line(0, y*colWidth, width, y*colWidth);
   }
+  pop();
+}
 
-  needsUpdate() {
-    return this.currentFrame != this.lastRequestedFrame;
+function drawCells(cells, cellColor = null) {
+  for (const cell of cells) {
+    let x = (rowWidth*cell.row);
+    let y = (colWidth*cell.col);
+    fill(cellColor ?? cell.color);
+    noStroke();
+    rect(x, y, rowWidth, colWidth);
   }
+}
 
-  scrub(cursor) {
-    this.currentFrame = cursor;
-  }
-
-  update() {
-    if (this.playState == 'playing') {
-      this.frameAccumulator += deltaTime / 1000;
-      
-      const frameTime = 1 / this.frameRate;
-      while (this.frameAccumulator >= frameTime) {
-	this.currentFrame = (this.currentFrame+1)%this.animation.length;
-	this.frameAccumulator -= frameTime;
-      }
-      this.progress = this.currentFrame / Math.min(this.animation.length);
-    }
+function handleDraw(isClick = false) {
+  switch(mode) {
+    case 'pencil':
+      timeline.getCurrentFrame().drawPoint(mouseX, mouseY);
+      break;
+    case 'line':
+      if (isClick) timeline.getCurrentFrame().startLine(mouseX, mouseY);
+      else timeline.getCurrentFrame().updateLine(mouseX, mouseY);
+      break;
+    case 'eraser':
+      timeline.getCurrentFrame().erasePoint(mouseX, mouseY);
   }
 }
 
@@ -332,53 +279,6 @@ class Frame {
   }
 }
 
-class BresenhamLine {
-  constructor() {
-    this.startX = 0;
-    this.startY = 0;
-    this.points = [];
-  }
-
-  start(startX, startY) {
-    this.points = [];
-    this.startX = startX;
-    this.startY = startY;
-  }
-  
-  calculate(newX, newY) {
-    this.points = [];
-    const dx = Math.abs(newX - this.startX);
-    const dy = Math.abs(newY - this.startY);
-    const sx = this.startX < newX ? 1 : -1;  // step direction
-    const sy = this.startY < newY ? 1 : -1;
-    let err = dx - dy;  // error accumulator
-    
-    let x = this.startX, y = this.startY;
-    
-    while (true) {
-      let cell = new Cell(1, 1, currentColor);
-      cell.setGridCoords(x, y);
-      this.points.push(cell);
-      
-      if (x === newX && y === newY) break;
-      
-      const e2 = 2 * err;
-      
-      // Should we step in x?
-      if (e2 > -dy) {
-	err -= dy;
-	x += sx;
-      }
-      
-      // Should we step in y?
-      if (e2 < dx) {
-	err += dx;
-	y += sy;
-      }
-    }
-  }
-}
-
 class Cell {
   constructor(x, y, c) {
     this.row = Math.floor(x/width*rows);
@@ -397,6 +297,4 @@ class Cell {
     return (x + y) * (x + y + 1) / 2 + y;
   }
 }
-
-
 </script>

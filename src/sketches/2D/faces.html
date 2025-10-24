@@ -1,7 +1,7 @@
 <title></title>
 
-<script src="./lib/p5.min.js" data-head ></script>
-<script src="./lib/face-api.min.js" data-head ></script>
+<script src="./lib/vendor/p5.min.js" data-head ></script>
+<script src="./lib/vendor/face-api.min.js" data-head ></script>
 
 <img id="img" src="./assets/people2.jpg" style="opacity: 0; position: absolute" />
 
@@ -81,7 +81,7 @@ function draw() {
   }
 }
 
-Promise.all([faceapi.nets.ssdMobilenetv1.loadFromUri("./lib/models")]).then(detect).catch(error => console.log(error));
+Promise.all([faceapi.nets.ssdMobilenetv1.loadFromUri("./lib/vendor/models")]).then(detect).catch(error => console.log(error));
 
 
 async function detect() {

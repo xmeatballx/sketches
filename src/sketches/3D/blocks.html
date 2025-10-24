@@ -1,8 +1,6 @@
 <title></title>
 
-<script src="./lib/p5.min.js" data-head></script>
 <script src="https://cdn.jsdelivr.net/npm/gl-matrix@3.4.3/gl-matrix.js" data-head></script>
-<script src="https://cdn.jsdelivr.net/npm/@davepagurek/p5.filterrenderer@0.0.17/p5.filterRenderer.min.js" data-head></script>
 <script type="importmap" data-head>
 {
   "imports": {
@@ -42,7 +40,6 @@
     display: block;
     position: absolute;
     inset: 0;
-    z-index: -1;
     opacity: 1;
     background-color: attr(value type(<color>), red);
   }
@@ -312,26 +309,6 @@ class Block {
 	});
       }
     }
-    /*this.dots.push({
-      x: -this.dotSize-marginX+this.w/2,
-      y: this.h/2,
-      z: -this.dotSize-marginZ,
-    })
-    this.dots.push({
-      x: this.dotSize+marginX-this.w/2,
-      y: this.h/2,
-      z: -this.dotSize-marginZ,
-    })
-    this.dots.push({
-      x: -this.dotSize-marginX+this.w/2,
-      y: this.h/2,
-      z: this.dotSize+marginZ,
-    })
-    this.dots.push({
-      x: this.dotSize+marginX-this.w/2,
-      y: this.h/2,
-      z: this.dotSize+marginZ,
-    })*/
   }
 }
 

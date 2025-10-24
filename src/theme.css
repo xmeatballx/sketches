@@ -1,0 +1,64 @@
+:root {
+    --color-background: #1e1e2e;
+    --color-foreground: #cdd6f4;
+    --color-border: #45475a;
+    --color-card: #181825;
+    --color-button: #313244;
+    --color-accent: #f2cdcd;
+    --color-accent-rollover: #f5e0dc;
+}
+
+body {
+    margin: 0;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+h1, h2, h3, a, button {
+    letter-spacing: 0.02rem;
+}
+
+a {
+    color: var(--color-foreground);
+    text-underline-offset: 2px;
+}
+
+button {
+    background-color: var(--color-accent);
+    color: var(--color-background);
+    border: 1px solid var(--color-border);
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+}
+
+button:active {
+    background-color: var(--color-accent-rollover);
+}
+
+input[type="radio"], 
+input[type="range"] {
+    accent-color: var(--color-accent);
+}
+
+input[type="text"],
+input[type="number"] {
+    background-color: var(--color-accent);
+}
+
+input[type="number"] {
+    width: 5ch;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+}
+
+.page-width {
+    max-width: 1200px;
+    margin-inline: auto;
+    padding: 8px;
+}

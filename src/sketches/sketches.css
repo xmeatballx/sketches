@@ -1,7 +1,3 @@
-body {
-    margin: 0;
-}
-
 main {
     display: grid;
     grid-template-areas: "canvas"
@@ -20,6 +16,7 @@ img, canvas, #app {
 
 #controls {
      grid-area: controls;
+     background-color: var(--color-card);
 }
 
 pre {

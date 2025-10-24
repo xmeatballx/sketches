@@ -1,13 +1,15 @@
 const argv = require('minimist')(process.argv.slice(2));
 const fs = require('fs').promises;
+const path = require('path');
 const chokidar = require('chokidar');
 const liveServer = require('live-server');
 const { JSDOM } = require('jsdom');
+const { glob } = require('glob');
 
 const PORT = 8080;
 const SRC_DIR = 'src';
 const SKETCH_DIR = `${SRC_DIR}/sketches`;
-const OUT_DIR = argv.dev ? 'tmp' : 'dist';
+const OUT_DIR = argv.dev ? './tmp' : 'dist';
 
 async function main() {
   const sketchDir = await fs.opendir(`./${SKETCH_DIR}`);
@@ -36,23 +38,22 @@ if (argv.dev) {
     console.log(`Watching for file changes in ${process.cwd()}/${SRC_DIR}...`);
   });
   
-  watcher.on('all', (event) => {
+  watcher.on('all', async (event) => {
     if (event === 'change' || event === 'add') {
       console.log('Rebuilding...');
-      main();
-      console.log("Rebuilt");
+      await main();
+      console.log("Done");
     }
   });
   
   watcher.on('error', error => console.error('Watcher error:', error));
   
-  liveServer.start({ root: `./${OUT_DIR}`, port: 8080, logLevel: 0, open: false });
+  fs.mkdir(OUT_DIR).then(() => liveServer.start({ root: `${OUT_DIR}`, port: 8080, logLevel: 0, wait: 500, open: false }));
 
-  process.on('SIGINT', () => {
-    fs.rm(OUT_DIR, { recursive: true, force: true }).then(() => {
-      console.log('Cleanup complete.');
-      process.exit(0);
-    });
+  process.on('SIGINT', async () => {
+    await fs.rm(OUT_DIR, { recursive: true, force: true });
+    console.log('Cleanup complete.');
+    process.exit(0);
   });
   
 }
@@ -114,7 +115,9 @@ async function compileSketch(template, path) {
   }, '');
   const image = doc.querySelector('#img')?.outerHTML ?? ''; 
   const controls = doc.querySelector('#controls')?.outerHTML ?? '';
-  const sketchScript = doc.querySelector('script#sketch')?.outerHTML;
+  const bodyScripts = [...doc.querySelectorAll('script:not([data-head])')].reduce((acc, curr) => {
+    return acc + curr.outerHTML;
+  }, '');
 
   const html = template
     .replace('{{ title }}', title.displayName)
@@ -122,19 +125,23 @@ async function compileSketch(template, path) {
     .replace('{{ libs }}', libScripts)
     .replace('{{ image }}', image)
     .replace('{{ controls }}', controls)
-    .replace('{{ sketch }}', sketchScript);
+    .replace('{{ sketch }}', bodyScripts);
   return html;
 }
 
 async function outputFiles(index, sketches) {
   const exists = await checkDirExists(OUT_DIR);
-  if (exists) await fs.rm(OUT_DIR, { recursive: true, force: true });
-  await fs.mkdir(OUT_DIR);
+  if (!exists) await fs.mkdir(OUT_DIR);
   await fs.cp(`${SRC_DIR}/lib`, `${OUT_DIR}/lib`, { recursive: true });
   await fs.cp(`${SRC_DIR}/assets`, `${OUT_DIR}/assets`, { recursive: true });
-  await fs.cp(`${SRC_DIR}/style.css`, `${OUT_DIR}/style.css`);
+  const cssFiles = await glob(`${SRC_DIR}/**/*.css`);
+  for (const file of cssFiles) {
+    const filename = path.basename(file);
+    console.log(filename);
+    await fs.cp(file, `${OUT_DIR}/${filename}`);
+  }
   await fs.writeFile(`./${OUT_DIR}/index.html`, index, { encoding: 'utf-8' });
-  for await (sketch of sketches) {
+  for await (const sketch of sketches) {
     await fs.writeFile(`./${OUT_DIR}/${sketch.name}`, sketch.html);
   }
 }
@@ -183,17 +190,19 @@ function getDisplayNameFromHTMLFileName(fileName, category) {
 
 function renderLinkList(links, title) {
   let list = `
-        <h2>${title}</h2>
-        <ul>`;
+        <div class="category">
+          <h2>${title}</h2>
+          <ul>`;
   const linkTags = links.reduce((acc, curr) => {
     return acc + `
-          <li>
-            <a href="${curr.fileName}">${curr.displayName}</a>
-          </li>`
+            <li>
+              <a href="${curr.fileName}">${curr.displayName}</a>
+            </li>`
   }, '');
   list += linkTags;
   list += `
-        </ul>
+          </ul>
+        </div>
     `;
   return list;
 }
