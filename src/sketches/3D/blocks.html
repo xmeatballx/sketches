@@ -9,6 +9,8 @@
   }
 }
 </script>
+<script src="./lib/classes/ui.js"></script>
+<script src="./lib/classes/tilegrid.js"></script>
 
 <style>
   #controls {
@@ -84,35 +86,58 @@
     left: 0;
     margin-top: 0.2rem;
   }
+  input[type="color"] { display: block }
+  .colors {
+    display: flex;
+    text-align: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
 </style>
 
 <div id="controls">
   <div id="app">
     <aside>
-      <details>
-	<summary aria-label="colors">
-	  <div class="swatch"></div>
-	</summary>
-	<fieldset>
-	  <input type="radio" name="colors" class="swatch" value="red" aria-label="red" checked />
-	  <input type="radio" name="colors" class="swatch" value="yellow" aria-label="yellow" />
-	  <input type="radio" name="colors" class="swatch" value="green" aria-label="green" />
-	  <input type="radio" name="colors" class="swatch" value="blue" aria-label="blue" />
-	</fieldset>
-      </details>
+      <fieldset class="colors">
+	<label for="color">Block
+	  <input type="color" id="color" value="#ff0000" />
+	</label>
+	<label for="base-color">Base
+	  <input type="color" id="base-color" value="#0000ff" />
+	</label>
+	<label for="bg-color">BG
+	  <input type="color" id="bg-color" value="#cccccc" />
+	</label>
+      </fieldset>
       <fieldset>
 	<div>
 	  <label for="blockWidth">Block width</label>
-	  <input id="blockWidth" type="range" min="1" max="5" />
+	  <input id="blockWidth" type="range" min="1" max="5" value="2" />
 	</div>
 	<div>
 	  <label for="blockDepth">Block depth</label>
-	  <input id="blockDepth" type="range" min="1" max="5" />
+	  <input id="blockDepth" type="range" min="1" max="5" value="2" />
 	</div>
       </fieldset>
     </aside>
   </div>
 </div>
+
+<script>
+  const ui = new UI().initialize({
+    blockWidthInput: document.getElementById('blockWidth'),
+    blockDepthInput: document.getElementById('blockDepth'),
+    colorInput: document.getElementById('color'),
+    baseColorInput: document.getElementById('base-color'),
+    bgColorInput: document.getElementById('bg-color')
+  });
+
+  ui.registerAction('blockWidthChange', ui.elements.blockWidthInput, 'input');
+  ui.registerAction('blockDepthChange', ui.elements.blockDepthInput, 'input');
+  ui.registerAction('colorChange', ui.elements.colorInput, 'input');
+  ui.registerAction('baseColorChange', ui.elements.baseColorInput, 'input');
+  ui.registerAction('bgColorChange', ui.elements.bgColorInput, 'input');
+</script>
 
 <script type="module" id="sketch">
 import * as THREE from 'three';
@@ -125,40 +150,6 @@ let colors = [
   new THREE.Color().setRGB(1,1,0),
 ];
 
-class TileGrid {
-  constructor(rows, cols, rowSize, colSize) {
-    this.tiles = [];
-    this.rows = rows;
-    this.cols = cols;
-    let i = 0;
-    this.rowSize = rowSize;
-    this.colSize = colSize;
-    this.w = rowSize*rows-rowSize;
-    this.d = colSize*cols-colSize;
-    for (let z = 0; z < cols; z++) {
-      for (let x = 0; x < rows; x++) {
-	let pos = this.getCellPosition(x, z);
-	this.tiles[i] = new Tile(x, z, pos, rowSize, colSize, colors[0]); 
-	i++;
-      }
-    }
-  }
-  getActiveTile() {
-    return this.tiles.find(tile => tile.hovered);
-  }
-
-  getTile(x, z) {
-    return this.tiles[x+z*this.rows]
-  }
-  getCellPosition(row, col) {
-    return new THREE.Vector3(
-      row*this.rowSize-this.w/2,
-      0,
-      (col*this.colSize)-this.d/2
-    );
-  }
-}
-
 class Tile {
   constructor(row, col, pos, w, d) {
     this.row = row;
@@ -170,7 +161,6 @@ class Tile {
     this.h = 0.5;
     this.d = d;
     this.maxHeight = 0;
-    this.hovered = false;
     this.blocks = [];
     this.bounds = new THREE.Box3();
     this.calculateBounds();
@@ -195,7 +185,6 @@ class Tile {
     scene.remove(this.boundsHelper);
     this.boundsHelper.dispose();
     this.boundsHelper = new THREE.Box3Helper(this.cellBounds);
-    console.log(this.cellBounds)
     scene.add(this.boundsHelper);
   }
 
@@ -218,6 +207,14 @@ class Tile {
       }
     }
     this.maxHeight = maxHeight;
+  }
+
+  addChild(child, callback) {
+    this.children.push(child);
+  }
+
+  removeChild(i) {
+    this.children.splice(i, 1);
   }
 
   addBlock(x, y, z, w, h, d, c) {
@@ -251,7 +248,6 @@ class Block {
     this.meshes = [];
     this.group = new THREE.Group();
     this.material = m;
-    this.hovered = false;
     m.color = this.c.clone();
     let box = this.createBox();
     box.geometry.computeBoundingBox();
@@ -261,6 +257,11 @@ class Block {
     boundsHelper.material.color = 0x0000ff;
     //if (this.y > 0) scene.add(boundsHelper);
     this.createDots();
+  }
+
+  setColor(c) {
+    this.c = c;
+    this.material.color = c;
   }
 
   createBox() {
@@ -293,7 +294,7 @@ class Block {
   getDotPositions() {
     let marginX = 0.15;
     let marginZ = 0.15;
-    const dotsX = this.w * 2;  // number of dots across width
+    const dotsX = this.w * 2;
     const dotsZ = this.d * 2; 
     const totalWidthForDots = this.w - (2 * marginX) - (this.dotSize * 2);
     const totalDepthForDots = this.d - (2 * marginZ) - (this.dotSize * 2);
@@ -312,179 +313,14 @@ class Block {
   }
 }
 
-class UI {
-  constructor() {
-    this.colorButtons = document.querySelectorAll("input.swatch");
-    this.activeColor = document.querySelector(".swatch:checked");
-    this.colorButtons.forEach(button => {
-      button.addEventListener("click", (e) => {
-	this.activeColor = e.target;
-      })
-    });
-    this.blockWidthSlider = document.querySelector("#blockWidth");
-    this.blockDepthSlider = document.querySelector("#blockDepth");
-
-  }
-
-  onBlockDimChange(dim, callback) {
-    if (dim == "width") {
-      this.blockWidthSlider.addEventListener("input", e =>  {
-	callback.call(this, e.target.value); 
-      });
-    } else if (dim == "depth") {
-      this.blockDepthSlider.addEventListener("input", e =>  {
-	callback.call(this, e.target.value); 
-      });
-    } else {
-      throw("Invalid dimension in UI.onBlockDimChange");
-    }
-  }
-
-  getActiveColor() {
-    return this.activeColor.value;
-  }
-}
-
-class SceneControls {
-  constructor(camera) {
-    this.camera = camera;
-    this.uiCamera = new THREE.PerspectiveCamera( 70, (window.innerWidth-menuWidth) / window.innerHeight, 0.1, 100 );
-    this.uiCamera.position.x = 2;
-    this.uiCamera.position.z = 2;
-    this.mouseDown = false;
-    this.raycaster = new THREE.Raycaster();
-
-    this.scene = new THREE.Scene();
-    let position = new THREE.Vector3(2, 0, 0);
-    this.gizmo = new Gizmo(position, 0.02, 1);
-    this.gizmo.group.rotateY(-Math.PI/4);
-    let box = new THREE.Box3Helper(this.gizmo.bounds);
-    //this.scene.add(this.gizmo.group);
-    //this.scene.add(box);
-    this.mouseOrigin = new THREE.Vector2();
-  }
-
-  handleMouse(mouse) {
-    this.raycaster.setFromCamera(mouse, this.uiCamera);
-    const intersects = this.raycaster.ray.intersectsBox(this.gizmo.bounds);
-    if (intersects && this.mouseDown) {
-      const spherical = new THREE.Spherical();
-      const target = new THREE.Vector3(0, 0, 0); // orbit center
-
-      // Initialize from current camera position
-      spherical.setFromVector3(camera.position.clone().sub(target));
-      let deltaX = mouse.x - this.mouseOrigin.x;
-      let deltaY = mouse.y - this.mouseOrigin.y;
-      const rotationSpeed = 0.1;
-
-      // Get camera's local axes
-      const offset = camera.position.clone().sub(target);
-
-      // Rotate around world Y-axis (horizontal drag)
-      const quaternionY = new THREE.Quaternion().setFromAxisAngle(
-	  new THREE.Vector3(0, 1, 0), 
-	  -deltaX * rotationSpeed
-      );
-      offset.applyQuaternion(quaternionY);
-
-      // Rotate around camera's local X-axis (vertical drag)
-      const cameraRight = new THREE.Vector3();
-      camera.getWorldDirection(cameraRight);
-      cameraRight.cross(new THREE.Vector3(0, 1, 0)).normalize();
-
-      const quaternionX = new THREE.Quaternion().setFromAxisAngle(
-	  cameraRight,
-	  deltaY * rotationSpeed
-      );
-      offset.applyQuaternion(quaternionX);
-
-      //camera.position.copy(target).add(offset);
-      //camera.lookAt(target);
-      const inverseQuaternion = camera.quaternion.clone().invert();
-      this.gizmo.group.quaternion.copy(inverseQuaternion);
-    }
-  }
-
-}
-
-class Gizmo {
-  constructor(position, thickness, len) {
-    this.position = position;
-    this.origin = new THREE.Vector3(0, 0, 0);
-    this.group = new THREE.Group();
-    this.group.position.copy(position.clone());
-    this.thickness = thickness;
-    this.len = len;
-    this.bounds = new THREE.Box3(
-      new THREE.Vector3(position.x-len, position.y-len, position.z-len),
-      new THREE.Vector3(position.x+len, position.y+len, position.z+len)
-    );
-    this.createArrows();
-    this.createBall();
-  }
-
-  createBall() {
-    const sphereGeometry = new THREE.SphereGeometry(0.15);
-    const ball = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ color: 0xcccccc }));
-    this.group.add(ball);
-  }
-
-  createArrows() {
-    let arrowX = this.createThickArrow(new THREE.Vector3(1, 0, 0), this.origin, this.len, 0xff0000, this.thickness, 0.03);
-    this.group.add(arrowX);
-    let arrowY = this.createThickArrow(new THREE.Vector3(0, 1, 0), this.origin, this.len, 0xffff00, this.thickness, 0.03);
-    this.group.add(arrowY);
-    let arrowZ = this.createThickArrow(new THREE.Vector3(0, 0, 1), this.origin, this.len, 0x00ff00, this.thickness, 0.03);
-    this.group.add(arrowZ);
-  };
-
-
-  createThickArrow(dir, origin, length, color, shaftRadius, coneRadius) {
-    const group = new THREE.Group();
-    
-    // Normalize direction
-    dir.normalize();
-    
-    // Create shaft (cylinder)
-    const shaftLength = length * 0.8;
-    const shaftGeometry = new THREE.CylinderGeometry(
-      shaftRadius, shaftRadius, shaftLength, 8
-    );
-    shaftGeometry.translate(0, length/2, 0);
-    const shaftMaterial = new THREE.MeshBasicMaterial({ color });
-    const shaft = new THREE.Mesh(shaftGeometry, shaftMaterial);
-    
-    // Create head (cone)
-    const headLength = length * 0.2;
-    const headGeometry = new THREE.ConeGeometry(coneRadius * 2, headLength, 8);
-    const head = new THREE.Mesh(headGeometry, shaftMaterial);
-    head.position.y = shaftLength + headLength / 2;
-
-    
-    group.add(shaft);
-    group.add(head);
-    
-    // Position and orient
-    group.position.copy(origin);
-    group.quaternion.setFromUnitVectors(
-      new THREE.Vector3(0, 1, 0), dir
-    );
-    
-    return group;
-  }
-
-}
-
-let camera, scene, renderer, orbitControls, controls, raycaster, pointer, grid, mouseLight, blockWidth, blockDepth;
+let camera, scene, renderer, orbitControls, raycaster, pointer, grid, mouseLight, blockWidth, blockDepth;
 let cursor;
 let menuWidth = 300;
-let ui;
 init();
 
 function init() {
   blockWidth = 2;
-  blockDepth = 4;
-  ui = new UI();
+  blockDepth = 2;
 
   camera = new THREE.PerspectiveCamera( 70, (window.innerWidth-menuWidth) / window.innerHeight, 0.1, 100 );
   camera.position.y = 10;
@@ -497,7 +333,7 @@ function init() {
   pointer = new THREE.Vector2();
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color().setRGB(255,255,255);
+  scene.background = new THREE.Color( 0xCCCCCC );
 
   renderer = new THREE.WebGLRenderer( { antialias: true } );
   renderer.setPixelRatio( window.devicePixelRatio );
@@ -505,9 +341,9 @@ function init() {
   renderer.setAnimationLoop( animate );
   renderer.domElement.setAttribute("id", "scene");
   document.querySelector("#app").appendChild( renderer.domElement );
+  ui.registerCanvas('canvas#scene');
 
   orbitControls = new OrbitControls( camera, renderer.domElement );
-  controls = new SceneControls( camera );
 
   const light = new THREE.AmbientLight( 0xf3f3f3 );
   scene.add( light );
@@ -521,7 +357,9 @@ function init() {
 
   window.addEventListener( 'resize', onWindowResize );
 
-  grid = new TileGrid(20, 20, 0.5, 0.5);
+  grid = new TileGrid(20, 20, 0.5, 0.5, ({ row, col, pos, rowSize, colSize }) => {
+    return new Tile(row, col, pos, rowSize, colSize);
+  });
   for (let y = 0; y < grid.cols; y+=2) {
     for (let x = 0; x < grid.rows; x+=2) {
       let i = x+y*grid.rows;
@@ -539,19 +377,23 @@ function init() {
       tile.blocks[0].show();
     }
   }
+  let firstBlock = grid.tiles[0].blocks[0];
   cursor = new Block(
-    grid.tiles[0].blocks[0].x,
-    grid.tiles[0].blocks[0].y+grid.tiles[0].h,
-    grid.tiles[0].blocks[0].z,
+    firstBlock.x,
+    firstBlock.y+grid.tiles[0].h,
+    firstBlock.z,
     blockWidth/2,
-    grid.tiles[0].blocks[0].h,
+    firstBlock.h,
     blockDepth/2,
     new THREE.Color( 0xffffff ),
     new THREE.MeshBasicMaterial( { wireframe: true } )
   );
   cursor.show();
-  ui.onBlockDimChange("width", (w) => {
-    blockWidth = w;
+
+  ui.onCanvasMouseMove( onPointerMove );
+  ui.onCanvasClick( onClick );
+  ui.on("blockWidthChange", (e) => {
+    blockWidth = e.target.value;
     scene.remove(cursor.group);
     cursor = new Block(
       cursor.group.position.x,
@@ -569,8 +411,8 @@ function init() {
       t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
     });
   });
-  ui.onBlockDimChange("depth", (d) => {
-    blockDepth = d;
+  ui.on("blockDepthChange", (e) => {
+    blockDepth = e.target.value;
     scene.remove(cursor.group);
     cursor = new Block(
       cursor.group.position.x,
@@ -582,104 +424,57 @@ function init() {
       new THREE.Color( 0xffffff ),
       new THREE.MeshBasicMaterial( { wireframe: true } )
     );
+
     grid.tiles.forEach(t => {
       t.calculateBounds();
       t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
     });
     scene.add(cursor.group);
   });
-}
 
-window.addEventListener( 'pointermove', onPointerMove );
-renderer?.domElement?.addEventListener( 'click', onClick );
-window.addEventListener( 'contextmenu', onRightClick );
-window.addEventListener( 'mousedown', () => {
-  controls.mouseOrigin = pointer.clone();
-  controls.mouseDown = true;
-  console.log('down');
-
-});
-window.addEventListener( 'mouseup', () => {
-  console.log("up");
-  controls.mouseDown = false;
-});
-
-function onWindowResize() {
-
-  camera.aspect = (window.innerWidth-menuWidth) / window.innerHeight;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize( window.innerWidth-menuWidth, window.innerHeight );
-
+  ui.on('baseColorChange', (e) => {
+    grid.tiles.forEach(tile => tile.blocks[0]?.setColor(new THREE.Color().setStyle(e.target.value)))
+  });
+  ui.on('bgColorChange', (e) => {
+    scene.background = new THREE.Color().setStyle(e.target.value);
+  });
+  window.addEventListener( 'contextmenu', onRightClick );
 }
 
 function animate() {
   if (renderer?.domElement) orbitControls.update();
-  controls.handleMouse(pointer);
   raycaster.setFromCamera( pointer, camera );
 
   //reset state
   grid.tiles.forEach(tile => {
     tile.blocks.forEach(block => {
-      block.hovered = false;
       block.meshes.forEach(mesh => mesh.material.color = block.c.clone());
     });
-    tile.hovered = false;
   });
+  grid.resetActiveTile();
 
   //get intersections
-  let block;
-  for (let i = 0; i < grid.tiles.length; i++) {
-    block = grid.tiles[i].blocks.find(block => raycaster.ray.intersectsBox(block.bounds));
-    if (block) {
-      block.hovered = true;
-      break;
-    }
-  }
   let active = grid.tiles.find(tile => {
-    //return !!intersects;
     return raycaster.ray.intersectsBox(tile.bounds);
   });
-  if (block) {
-  }
 
-  //do stuff with intersected block
+  //do stuff with intersected tile
   if (active) {
     mouseLight.position.set(active.x, active.y+3, active.z) ;
-    active.hovered = true;
-    let block;
-    for (let i = 0; i < grid.tiles.length; i++) {
-      block = grid.tiles[i].blocks.find(block => raycaster.ray.intersectsBox(block.bounds));
-      if (block) {
-	block.hovered = true;
-	break;
-      }
-    }
+    grid.setActiveTile(active.row, active.col);
     let pos = new THREE.Vector3(active.x, active.maxHeight + active.h, active.z);
     if (blockWidth % 2 == 0) pos.x += active.w/2;
     if (blockDepth % 2 != 0) pos.z -= active.d/2;
     cursor.group.position.set(pos.x, pos.y + cursor.h/2, pos.z);
   }
 
-  renderer.autoClear = false;
-  renderer.clear();
   renderer.render( scene, camera );
-  renderer.clearDepth();
-  renderer.render(controls.scene, controls.uiCamera);
 
 }
 
 function onClick( event ) {
   let tile = grid.getActiveTile();
   if (!tile) return;
-  let block;
-  for (let i = 0; i < grid.tiles.length; i++) {
-    block = grid.tiles[i].blocks.find(block => raycaster.ray.intersectsBox(block.bounds));
-    if (block) {
-      block.hovered = true;
-      break;
-    }
-  }
   let x = tile.x;
   let z = tile.z;
   if (blockWidth % 2 == 0) x += tile.w/2;
@@ -691,13 +486,19 @@ function onClick( event ) {
     blockWidth,
     tile.h,
     blockDepth,
-    new THREE.Color().setStyle(ui.getActiveColor()),
+    new THREE.Color().setStyle(ui.elements.colorInput?.value),
     new THREE.MeshBasicMaterial()
   );
   tile.calculateBounds();
   grid.tiles.forEach(t => {
     t.calculateOverlaps(grid.tiles, blockWidth, blockDepth);
   });
+}
+
+function onWindowResize() {
+  camera.aspect = (window.innerWidth-menuWidth) / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize( window.innerWidth-menuWidth, window.innerHeight );
 }
 
 function onRightClick( event ) {
@@ -720,5 +521,6 @@ function onPointerMove( event ) {
   pointer.y = - ( event.clientY / (window.innerHeight) ) * 2 + 1;
 
 }
+
 </script>
 

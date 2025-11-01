@@ -24,6 +24,11 @@ a {
     text-underline-offset: 2px;
 }
 
+label {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+}
+
 button {
     background-color: var(--color-accent);
     color: var(--color-background);
@@ -32,6 +37,7 @@ button {
     font-weight: 600;
     padding: 0.25rem 0.5rem;
     cursor: pointer;
+    height: fit-content;
 }
 
 button:active {

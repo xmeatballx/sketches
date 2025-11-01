@@ -1,16 +1,19 @@
 <script src="./lib/vendor/p5.min.js" data-head></script>
 <script src="./lib/components/range.js" data-head></script>
+<script src="./lib/classes/ui.js" data-head></script>
 
 <style>
   canvas {
     border: 4px solid;
   }
-  input[type="range"] {
+  input {
     display: block;
   }
-  .sliders {
+  fieldset {
     display: flex;
     gap: 1rem;
+    justify-content: space-between;
+    align-items: center;
   }
 </style>
 
@@ -27,35 +30,71 @@
     </label>
   </fieldset>
   <fieldset>
-    <input type="color" id="stroke" />
+    <label for="stroke">Paint
+      <input type="color" id="stroke" />
+    </label>
+    <label for="stroke">Background
+      <input type="color" id="bg-color" />
+    </label>
     <button type="button" id="clear">Clear</button>
   </fieldset>
 </div>
+
+<script>
+  const ui = new UI().initialize({
+    opacityInput: document.getElementById('opacity'),
+    strokeWeightInput: document.getElementById('strokeWidth'),
+    bleedInput: document.getElementById('bleed'),
+    colorInput: document.getElementById('stroke'),
+    backgroundInput: document.getElementById('bg-color'),
+    clearButton: document.getElementById('clear')
+  });
+  ui.registerAction('opacityChange', ui.elements.opacityInput, 'input');
+  ui.registerAction('strokeWeightChange', ui.elements.strokeWeightInput, 'input');
+  ui.registerAction('bleedChange', ui.elements.bleedInput, 'input');
+  ui.registerAction('colorChange', ui.elements.colorInput, 'input');
+  ui.registerAction('backgroundColorChange', ui.elements.backgroundInput, 'input');
+  ui.registerAction('clear', ui.elements.clearButton, 'click');
+</script>
+
 <script id="sketch">
-let g, brush, ui;
+let g, brush, bgColor;
 function setup() {
   createCanvas(500, 500);
+  ui.registerCanvas('.p5Canvas');
   strokeCap(PROJECT);
   g = createGraphics(width, height);
-  ui = new UI(); 
-  brush = new Brush(ui.getWidth(), ui.getColor(), ui.getOpacity());
+  bgColor = color(255);
+
+  brush = new Brush(
+    ui.elements.strokeWeightInput.value,
+    ui.elements.colorInput.value,
+    ui.elements.opacityInput.value
+  );
+
+  ui.on('opacityChange', (e) => brush.setOpacity(parseFloat(ui.elements.opacityInput.value)));
+  ui.on('strokeWeightChange', (e) => brush.setBaseWeight(parseFloat(ui.elements.strokeWeightInput.value)));
+  ui.on('colorChange', (e) => {
+    console.log('color');
+    brush.setColor(ui.elements.colorInput.value)
+  });
+  ui.on('backgroundColorChange', (e) => bgColor = color(e.target.value));
+  ui.on('clear', (e) => {
+    g.clear();
+    clear();
+  });
 }
 
 function draw() {
-  const bleed = 255-(ui.getBleed() * 255);
-  background(255, 255, 255, bleed);
-  if (mouseIsPressed) {
-    brush.setBaseWeight(ui.getWidth());
-    brush.setColor(ui.getColor());
-    brush.setOpacity(ui.getOpacity());
-    brush.draw(g);
-  }
+  const bleed = 255-(parseFloat(ui.elements.bleedInput.value) * 255);
+  background(red(bgColor), green(bgColor), blue(bgColor), bleed);
+  if (ui.mouseDown) brush.draw(g);
   filter(BLUR);
   image(g, 0, 0);
-}    
+}
 
 function mouseReleased() {
-  prevWeight = 0;
+  brush.prevWeight = 0;
 }
 
 class Brush {
@@ -64,7 +103,7 @@ class Brush {
     this.weight = parseFloat(w); 
     this.prevWeight = parseFloat(w);
     this.color = color(c);
-    this.opacity = parseFloat(o);
+    this.opacity = parseFloat(o)*255;
   }
 
   setBaseWeight(scale) {
@@ -98,44 +137,12 @@ class Brush {
       
       let segmentWeight = lerp(this.prevWeight, smoothedWeight, (t1 + t2) / 2);
       
-      g.stroke(red(this.color), green(this.color), blue(this.color), this.opacity);
       g.strokeWeight(segmentWeight);
+      g.stroke(this.color.levels[0], this.color.levels[1], this.color.levels[2], this.opacity);
       g.line(x1, y1, x2, y2);
     }
     
-    // Store the smoothed weight for next frame
     this.prevWeight = smoothedWeight;
-  }
-}
-
-class UI {
-  constructor() {
-    this.colorInput = document.getElementById('stroke');
-    this.opacityInput = document.getElementById('opacity');
-    this.widthInput = document.getElementById('strokeWidth');
-    this.bleedInput = document.getElementById('bleed');
-    this.clearButton = document.getElementById("clear");
-    this.clearButton.addEventListener("click", () => {
-      this.colorInput.value = "#000000";
-      g.clear()
-      clear();
-    });
-  }
-
-  getBleed() {
-    return parseFloat(this.bleedInput.value);
-  }
-
-  getWidth() {
-    return parseFloat(this.widthInput.value);
-  }
-
-  getColor() {
-    return this.colorInput.value;
-  }
-
-  getOpacity() {
-    return parseFloat(this.opacityInput.value);
   }
 }
 </script>

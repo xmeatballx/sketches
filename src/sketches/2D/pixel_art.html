@@ -3,6 +3,7 @@
 <script src="./lib/classes/animation.js" data-head ></script>
 <script src="./lib/classes/bresenham-line.js" data-head ></script>
 <script src="./lib/classes/clipboard.js" data-head ></script>
+<script src="./lib/classes/ui.js" data-head ></script>
 
 <style>
 #controls {
@@ -50,81 +51,33 @@ input#cursor {
 </div>
 
 <script>
-function initializeUI() {
-  let elements = {
-    canvas: document.querySelector('.p5Canvas'),
-    playhead: document.getElementById("cursor"),
-    copyFrameButton: document.getElementById("copy-frame"),
-    pasteFrameButton: document.getElementById("paste-frame"),
-    duplicateButton: document.getElementById("duplicate"),
-    clearButton: document.getElementById("clear"),
-    playButton: document.getElementById('play'),
-    pauseButton: document.getElementById('pause'),
-    stopButton: document.getElementById('stop'),
-    frameRateInput: document.getElementById('frameRate'),
-    frameCountInput: document.getElementById('frames'),
-    colorInput: document.getElementById('color'),
-    modeInputs: document.querySelectorAll('[name="mode"]'),
-  }
+let ui = new UI().initialize({
+  playhead: document.getElementById("cursor"),
+  copyFrameButton: document.getElementById("copy-frame"),
+  pasteFrameButton: document.getElementById("paste-frame"),
+  duplicateButton: document.getElementById("duplicate"),
+  clearButton: document.getElementById("clear"),
+  playButton: document.getElementById('play'),
+  pauseButton: document.getElementById('pause'),
+  stopButton: document.getElementById('stop'),
+  frameRateInput: document.getElementById('frameRate'),
+  frameCountInput: document.getElementById('frames'),
+  colorInput: document.getElementById('color'),
+  modeInputs: document.querySelectorAll('[name="mode"]'),
+});
 
-  let mouseDown = false;
-
-  elements.canvas.addEventListener('mouseup', () => mouseDown = false);
-  elements.canvas.addEventListener('mouseleave', () => mouseDown = false);
-
-  const on = (eventName, callback) => {
-    switch(eventName) {
-      case 'mousePress':
-	elements.canvas.addEventListener('mousedown', (e) => {
-	  mouseDown = true;
-	  callback(e);
-	});
-	break;	
-      case 'mouseDrag':
-	elements.canvas.addEventListener('mousemove', (e) => {
-	  if (!mouseDown) return;
-	  callback(e);
-	});
-	break;	
-      case 'playheadMove':
-	elements.playhead.addEventListener('input', callback);
-	break;
-      case 'copyFrame':
-	elements.copyFrameButton.addEventListener('click', callback);
-	break;
-      case 'duplicateFrame':
-	elements.duplicateButton.addEventListener('click', callback);
-	break;
-      case 'clearFrame':
-	elements.clearButton.addEventListener('click', callback);
-	break;
-      case 'pasteFrame':
-	elements.pasteFrameButton.addEventListener('click', callback);
-	break;
-      case 'play':
-	elements.playButton.addEventListener('click', callback);
-	break;
-      case 'pause':
-	elements.pauseButton.addEventListener('click', callback);
-	break;
-      case 'stop':
-	elements.stopButton.addEventListener('click', callback);
-	break;
-      case 'colorChanged':
-	elements.colorInput.addEventListener('change', callback);
-      case 'frameRateChange':
-	elements.frameRateInput.addEventListener('change', callback);
-	break;
-      case 'frameCountChange':
-	elements.frameCountInput.addEventListener('change', callback);
-	break;
-      case 'modeChange':
-	elements.modeInputs.forEach(radio => radio.addEventListener('click', callback));
-    }
-  }
-  return { ...elements, on };
-
-}
+ui.registerAction('playheadMove', ui.elements.playhead, 'input');
+ui.registerAction('copyFrame', ui.elements.copyFrameButton, 'click');
+ui.registerAction('pasteFrame', ui.elements.pasteFrameButton, 'click');
+ui.registerAction('duplicateFrame', ui.elements.duplicateButton, 'click');
+ui.registerAction('clearFrame', ui.elements.clearButton, 'click');
+ui.registerAction('play', ui.elements.playButton, 'click');
+ui.registerAction('pause', ui.elements.pauseButton, 'click');
+ui.registerAction('stop', ui.elements.stopButton, 'click');
+ui.registerAction('frameRateChange', ui.elements.frameRateInput, 'change');
+ui.registerAction('frameCountChange', ui.elements.frameCountInput, 'change');
+ui.registerAction('colorChange', ui.elements.colorInput, 'change');
+ui.registerAction('modeChange', ui.elements.modeInputs, 'click');
 </script>
 
 <script id="sketch">
@@ -137,7 +90,6 @@ let canvasWidth = 450,
     mode = 'pencil',
     timeline,
     clipboard,
-    UI,
     currentColor;
 
 function setup() {
@@ -147,28 +99,29 @@ function setup() {
   clipboard = new Clipboard();
   currentColor = color(0);
 
-  UI = initializeUI();
-  UI.on('playheadMove', (e) => timeline.scrub(parseInt(e.target.value)));
-  UI.on('copyFrame', () => clipboard.copy(timeline.getCurrentFrame(), frame => frame.copy()));
-  UI.on('pasteFrame', () => timeline.setFrame(timeline.currentFrame, clipboard.paste()));
-  UI.on('duplicateFrame', () => {
+  ui.registerCanvas('.p5Canvas');
+  ui.onCanvasMouseDown(() => handleDraw(true));
+  ui.onCanvasMouseDrag(handleDraw);
+
+  ui.on('playheadMove', (e) => timeline.scrub(parseInt(e.target.value)));
+  ui.on('copyFrame', () => clipboard.copy(timeline.getCurrentFrame(), frame => frame.copy()));
+  ui.on('pasteFrame', () => timeline.setFrame(timeline.currentFrame, clipboard.paste()));
+  ui.on('duplicateFrame', () => {
     clipboard.copy(timeline.getCurrentFrame(), frame => frame.copy());
     timeline.setFrame(timeline.currentFrame + 1, clipboard.paste());
     timeline.scrub(timeline.currentFrame + 1);
   });
-  UI.on('clearFrame', () => timeline.setFrame(timeline.currentFrame, new Frame()));
-  UI.on('play', () => timeline.play());
-  UI.on('pause', () => timeline.pause());
-  UI.on('stop', () => timeline.stop());
-  UI.on('frameRateChange', (e) => timeline.frameRate = parseInt(e.target.value));
-  UI.on('frameCountChange', (e) => timeline.setLength(parseInt(e.target.value)));
-  UI.on('colorChange', (e) => currentColor = color(e.target.value));
-  UI.on('mousePress', () => handleDraw(true));
-  UI.on('mouseDrag', () => handleDraw());
-  UI.on('modeChange', (e) => mode = e.target.value);
+  ui.on('clearFrame', () => timeline.setFrame(timeline.currentFrame, new Frame()));
+  ui.on('play', timeline.play);
+  ui.on('pause', timeline.pause);
+  ui.on('stop', timeline.stop);
+  ui.on('frameRateChange', (e) => timeline.frameRate = parseInt(e.target.value));
+  ui.on('frameCountChange', (e) => timeline.setLength(parseInt(e.target.value)));
+  ui.on('colorChange', (e) => currentColor = color(e.target.value));
+  ui.on('modeChange', (e) => mode = e.target.value);
 
-  timeline.frameRate = parseInt(UI.frameRateInput.value);
-  timeline.setLength(parseInt(UI.frameCountInput.value));
+  timeline.frameRate = parseInt(ui.elements.frameRateInput.value);
+  timeline.setLength(parseInt(ui.elements.frameCountInput.value));
 
   rectMode("CENTER");
 }
@@ -177,8 +130,8 @@ function draw() {
   background(255);
   timeline.update(deltaTime);
 
-  UI.playhead.value = timeline.currentFrame;
-  UI.playhead.max = timeline.frames.length - 1;
+  ui.elements.playhead.value = timeline.currentFrame;
+  ui.elements.playhead.max = timeline.frames.length - 1;
 
   if (timeline.playState !== 'playing') {
     let prevCells = timeline.getFrame(timeline.currentFrame-1)?.filledCells;
