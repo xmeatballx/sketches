@@ -1,0 +1,84 @@
+
+<script src="./lib/vendor/p5.min.js" data-head ></script>
+<script src="./lib/shader-snippets/noise.js" type="text/javascript" data-head ></script>
+
+<script id="sketch">
+let fillShader;
+
+let vertSrc = `
+precision highp float;
+attribute vec3 aPosition;
+uniform mat4 uProjectionMatrix;
+uniform mat4 uModelViewMatrix;
+varying vec3 vPosition;
+void main() {
+  vPosition = aPosition;
+  gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+}
+`;
+
+let fragSrc = `
+precision highp float;
+
+uniform vec2 u_resolution;
+uniform float u_time;
+
+${noiseLib}
+
+#define OCTAVES 8
+
+// Domain warping by Inigo Quilez
+// https://iquilezles.org/articles/warp/
+// f(p + fbm(p + fbm(p))), with the offsets from his article.
+// q and r are the intermediate warp layers, returned for coloring
+float pattern(in vec2 p, out vec2 q, out vec2 r) {
+    q = vec2(fbm(p + vec2(0.0, 0.0), OCTAVES),
+             fbm(p + vec2(5.2, 1.3), OCTAVES));
+
+    r = vec2(fbm(p + 4.0 * q + vec2(1.7, 9.2) + 0.15 * u_time, OCTAVES)),
+             fbm(p + 4.0 * q + vec2(8.3, 2.8) + 0.126 * u_time, OCTAVES);
+
+    return fbm(p + 4.0 * r, OCTAVES);
+}
+
+void main() {
+    vec2 st = gl_FragCoord.xy/u_resolution.xy;
+    st.x *= u_resolution.x/u_resolution.y;
+    vec2 p = st * 3.0;
+
+    vec2 q, r;
+    float f = pattern(p, q, r);
+
+    vec3 col = mix(vec3(0.08, 0.22, 0.22), vec3(0.45, 0.66, 0.58), smoothstep(0.2, 0.8, f));
+    col = mix(col, vec3(0.02, 0.05, 0.08), smoothstep(0.5, 0.95, length(q)) * 0.8);
+    col = mix(col, vec3(0.80, 0.64, 0.46), smoothstep(0.55, 0.75, r.x) * 0.9);
+    col = mix(col, vec3(0.88, 0.96, 0.92), smoothstep(0.6, 0.85, f));
+
+    float e = 2.0 / u_resolution.y;
+    vec2 dq, dr;
+    float fx = pattern(p + vec2(e, 0.0), dq, dr);
+    float fy = pattern(p + vec2(0.0, e), dq, dr);
+    vec3 n = normalize(vec3(f - fx, f - fy, e * 25.0));
+    vec3 lig = normalize(vec3(0.6, 0.7, 0.5));
+    col *= 0.7 + 0.45 * clamp(dot(n, lig), 0.0, 1.0);
+
+    gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+let t = 0;
+
+function setup() {
+  createCanvas(450, 450, WEBGL);
+  fillShader = createShader(vertSrc, fragSrc);
+  shader(fillShader);
+  noStroke();
+}
+
+function draw() {
+  t += .01;
+  fillShader.setUniform('u_resolution', [width * pixelDensity(), height * pixelDensity()]);
+  fillShader.setUniform('u_time', t);
+  plane(width, height);
+}
+</script>

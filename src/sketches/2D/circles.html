@@ -1,0 +1,66 @@
+<script src="./lib/vendor/p5.min.js" data-head></script>
+
+<script id="sketch">
+let duration = 300;
+let points;
+let oldThetas;
+let newThetas;
+
+function setup() {
+  createCanvas(450, 450);
+  background(0);
+  noFill();
+  stroke(255);
+  strokeWeight(2);
+  translate(width/2, height/2);
+  points = pointsInCircle(50, 200, 0, 0);
+  points.sort((a, b) => a.y - b.y);
+  oldThetas = points.map(p => p.theta);
+  newThetas = points.map(() => random(0, PI));
+  for (let i = 0; i < points.length - 1; i++) {
+    if (i == 0) continue;
+    //line(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
+    let { x, y, r, theta } = points[i];
+
+    push();
+    arc(0, 0, r * 2, r * 2, -theta, theta)
+    pop();
+  }
+}
+
+function draw() {
+  background(0);
+  translate(width/2, height/2);
+  if (frameCount % duration == 0) {
+    oldThetas = [...newThetas];
+    for (let i = 0; i < points.length - 1; i++) {
+      newThetas[i] = random(0, PI);
+    }
+  }
+
+  for (let i = 0; i < points.length - 1; i++) {
+    if (i == 0) continue;
+    //line(points[i - 1].x, points[i - 1].y, points[i].x, points[i].y);
+    let { x, y, r } = points[i];
+
+    let lerpedTheta = lerp(oldThetas[i], newThetas[i], frameCount % duration / duration);
+
+    push();
+    rotate(points[i].theta);
+    arc(0, 0, r * 2, r * 2, -lerpedTheta, lerpedTheta)
+    pop();
+  }
+}
+
+function pointsInCircle(numPoints, radius, x, y) {
+  let points = [];
+  for (let i = 0; i < numPoints; i++) {
+    let theta = random(0, PI);
+    let r = sqrt(random(0, 1)) * radius;
+    let posX = sin(theta) * r;
+    let posY = cos(theta) * r;
+    points.push({ x: posX, y: posY, r, theta });
+  }
+  return points;
+}
+</script>
